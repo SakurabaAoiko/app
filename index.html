@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KenKen 9×9</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f3ee;
+    --surface: #ffffff;
+    --grid-line: #c8c4bc;
+    --grid-bold: #2c2a26;
+    --cell-hover: #e8f4fd;
+    --cell-selected: #b8ddf7;
+    --cell-memo-bg: #f0f7ff;
+    --cage-label: #1a5fa8;
+    --error-bg: #fde8e8;
+    --error-text: #c0392b;
+    --correct-bg: #e8f8ed;
+    --ink: #1c1a17;
+    --ink-muted: #6b6860;
+    --accent: #1a5fa8;
+    --accent-light: #deeeff;
+    --btn-bg: #2c2a26;
+    --btn-text: #f5f3ee;
+    --memo-color: #da70d6;
+    --shadow: 0 2px 12px rgba(0,0,0,0.10);
+  }
+
+  body {
+    background: var(--bg);
+    font-family: 'Helvetica Neue', 'Arial', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 1rem 3rem;
+    color: var(--ink);
+  }
+
+  header {
+    width: 100%;
+    max-width: 680px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1.2rem;
+  }
+
+  .title {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--ink);
+  }
+
+  .title span {
+    color: var(--accent);
+  }
+
+  #status-bar {
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
+
+  #mode-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 1rem;
+    width: 100%;
+    max-width: 680px;
+  }
+
+  .pill-btn {
+    padding: 6px 16px;
+    border-radius: 99px;
+    border: 1.5px solid var(--grid-line);
+    background: var(--surface);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.13s, border-color 0.13s;
+    color: var(--ink);
+  }
+
+  .pill-btn.active {
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border-color: var(--btn-bg);
+  }
+
+  .pill-btn:hover:not(.active) {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .spacer { flex: 1; }
+
+  .action-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1.5px solid var(--grid-line);
+    background: var(--surface);
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--ink);
+    transition: background 0.12s;
+  }
+
+  .action-btn:hover { background: #ede9e2; }
+
+  .action-btn.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  .action-btn.primary:hover { background: #1450a0; }
+
+  #grid-wrap {
+    position: relative;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    border-radius: 4px;
+    border: 2.5px solid var(--grid-bold);
+    touch-action: none;
+    user-select: none;
+  }
+
+  #grid-svg {
+    display: block;
+  }
+
+  .cell-bg { fill: white; }
+  .cell-bg.hover { fill: var(--cell-hover); }
+  .cell-bg.selected { fill: var(--cell-selected); }
+  .cell-bg.error { fill: var(--error-bg); }
+  .cell-bg.correct { fill: var(--correct-bg); }
+  .cell-bg.related { fill: #eef5fb; }
+
+  .cell-value {
+    font-size: 22px;
+    font-weight: 600;
+    fill: var(--ink);
+    dominant-baseline: central;
+    text-anchor: middle;
+    pointer-events: none;
+  }
+
+  .cell-value.error { fill: var(--error-text); }
+
+  .memo-num {
+    font-size: 13px;
+    fill: var(--memo-color);
+    dominant-baseline: central;
+    text-anchor: middle;
+    pointer-events: none;
+    font-weight: 800;
+
+  }
+
+  .cage-label {
+    font-size: 15px;
+    fill: var(--cage-label);
+    dominant-baseline: hanging;
+    text-anchor: start;
+    pointer-events: none;
+    font-weight: 600;
+  }
+
+  .cage-border {
+    fill: none;
+    stroke: #2c2a26;
+    stroke-width: 2.2;
+    pointer-events: none;
+  }
+
+  .grid-minor {
+    stroke: var(--grid-line);
+    stroke-width: 0.8;
+  }
+
+  .grid-major {
+    stroke: #888;
+    stroke-width: 1.6;
+  }
+
+  #numpad {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 6px;
+    margin-top: 1rem;
+    width: 100%;
+    max-width: 520px;
+  }
+
+  .num-key {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    border: 1.5px solid var(--grid-line);
+    background: var(--surface);
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, transform 0.08s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+  }
+
+  .num-key:hover { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+  .num-key:active { transform: scale(0.94); }
+
+  .num-key.del {
+    font-size: 14px;
+    color: var(--error-text);
+    border-color: #ecc;
+  }
+
+  #message {
+    min-height: 28px;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    margin-top: 0.8rem;
+    color: var(--accent);
+    transition: opacity 0.3s;
+  }
+
+  #clear-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  #clear-modal.show { display: flex; }
+
+  #clear-box {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 2.5rem 3rem;
+    text-align: center;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.22);
+    max-width: 320px;
+    width: 90%;
+  }
+
+  #clear-box h2 { font-size: 28px; margin-bottom: 0.5rem; }
+  #clear-box p { color: var(--ink-muted); font-size: 14px; margin-bottom: 1.5rem; }
+
+  .diff-badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-weight: 600;
+    margin-left: 6px;
+  }
+
+  .diff-easy { background: #d4edda; color: #1a6e30; }
+  .diff-normal { background: #fff3cd; color: #856404; }
+  .diff-hard { background: #f8d7da; color: #842029; }
+
+  @media (max-width: 540px) {
+    .title { font-size: 20px; }
+    #numpad { max-width: 360px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">Ken<span>Ken</span> <small style="font-size:14px;color:var(--ink-muted);font-weight:400;">9×9</small></div>
+  <div id="status-bar">問題 #<span id="puzzle-num">1</span> &nbsp;<span id="diff-badge" class="diff-badge diff-normal">普通</span></div>
+</header>
+
+<div id="mode-row">
+  <button class="pill-btn active" id="btn-input" onclick="setMode('input')">数字入力</button>
+  <button class="pill-btn" id="btn-memo" onclick="setMode('memo')">メモ</button>
+  <button class="action-btn" id="btn-memo-all" onclick="fillAllMemo()" title="選んでいるマスに1〜9のメモをまとめて入れます">全部メモ</button>
+  <div class="spacer"></div>
+  <button class="action-btn" onclick="resetPuzzle()">リセット</button>
+  <button class="action-btn primary" onclick="nextPuzzle()">次の問題 →</button>
+</div>
+
+<div id="grid-wrap">
+  <svg id="grid-svg" width="522" height="522" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<div id="numpad"></div>
+<div id="message"></div>
+
+<div id="clear-modal">
+  <div id="clear-box">
+    <h2>🎉 クリア！</h2>
+    <p id="clear-detail">素晴らしい！</p>
+    <button class="action-btn primary" style="width:100%;padding:12px;font-size:16px;" onclick="nextPuzzle()">次の問題 →</button>
+    <br><br>
+    <button class="action-btn" style="width:100%;padding:10px;" onclick="document.getElementById('clear-modal').classList.remove('show')">このまま見る</button>
+  </div>
+</div>
+
+<script>
+// ─── 定数 ───────────────────────────────────────────────
+const N = 9;
+const CELL = 58; // px per cell
+const PAD = 0;
+const OPS = ['+', '-', '×', '÷'];
+const SVG_SIZE = N * CELL;
+
+// ─── 状態 ───────────────────────────────────────────────
+let solution = [];    // [r][c] = 1..9
+let cages = [];       // [{cells, op, target}]
+let cellCage = [];    // [r][c] = cage index
+let userGrid = [];    // [r][c] = 0 or 1..9
+let memoGrid = [];    // [r][c] = Set of numbers
+let mode = 'input';
+let selected = null;  // {r, c}
+let puzzleCount = 0;
+let startTime = 0;
+let difficulty = 'normal';
+
+// ─── SVG ヘルパー ────────────────────────────────────────
+const svg = document.getElementById('grid-svg');
+
+function el(tag, attrs = {}, parent = null) {
+  const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function cx(c) { return c * CELL; }
+function cy(r) { return r * CELL; }
+
+// ─── 問題生成 ──────────────────────────────────────────
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function generateSolution() {
+  // ラテン方陣をランダムに生成
+  const base = [1,2,3,4,5,6,7,8,9];
+  const grid = Array.from({length: N}, () => Array(N).fill(0));
+
+  function validPlace(g, r, c, v) {
+    for (let i = 0; i < N; i++) {
+      if (g[r][i] === v || g[i][c] === v) return false;
+    }
+    return true;
+  }
+
+  function fill(pos) {
+    if (pos === N * N) return true;
+    const r = Math.floor(pos / N), c = pos % N;
+    const nums = shuffle([...base]);
+    for (const v of nums) {
+      if (validPlace(grid, r, c, v)) {
+        grid[r][c] = v;
+        if (fill(pos + 1)) return true;
+        grid[r][c] = 0;
+      }
+    }
+    return false;
+  }
+
+  fill(0);
+  return grid;
+}
+
+function buildCages(sol, diff) {
+  const assigned = Array.from({length: N}, () => Array(N).fill(false));
+  const cageList = [];
+  const cageMap = Array.from({length: N}, () => Array(N).fill(-1));
+
+  // 難易度によってケージ最大サイズと演算を変える
+  let maxSize, opWeights;
+  if (diff === 'easy') {
+    maxSize = 3;
+    opWeights = [0.7, 0.2, 0.1, 0.0]; // +, -, ×, ÷
+  } else if (diff === 'hard') {
+    maxSize = 6;
+    opWeights = [0.3, 0.2, 0.3, 0.2];
+  } else {
+    maxSize = 4;
+    opWeights = [0.45, 0.2, 0.25, 0.1];
+  }
+
+  function pickOp(cells) {
+    const vals = cells.map(([r,c]) => sol[r][c]);
+    const r = Math.random();
+    let cum = 0;
+    let candidates = [];
+    for (let i = 0; i < 4; i++) {
+      cum += opWeights[i];
+      if (r < cum) { candidates = [OPS[i]]; break; }
+    }
+    if (!candidates.length) candidates = ['+'];
+    const op = candidates[0];
+
+    if (op === '+') return { op: '+', target: vals.reduce((a, b) => a + b, 0) };
+    if (op === '×') return { op: '×', target: vals.reduce((a, b) => a * b, 1) };
+    if (op === '-') {
+      if (cells.length !== 2) return { op: '+', target: vals.reduce((a, b) => a + b, 0) };
+      const diff = Math.abs(vals[0] - vals[1]);
+      return { op: '-', target: diff };
+    }
+    if (op === '÷') {
+      if (cells.length !== 2) return { op: '+', target: vals.reduce((a, b) => a + b, 0) };
+      const big = Math.max(...vals), small = Math.min(...vals);
+      if (big % small !== 0) return { op: '-', target: big - small };
+      return { op: '÷', target: big / small };
+    }
+    return { op: '+', target: vals.reduce((a, b) => a + b, 0) };
+  }
+
+  const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+
+  function neighbors(r, c) {
+    return dirs.map(([dr,dc]) => [r+dr, c+dc]).filter(([nr,nc]) => nr>=0&&nr<N&&nc>=0&&nc<N);
+  }
+
+  // セルをランダム順に処理
+  const order = [];
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) order.push([r,c]);
+  shuffle(order);
+
+  for (const [sr, sc] of order) {
+    if (assigned[sr][sc]) continue;
+
+    // BFSで連結なケージを成長させる
+    const size = Math.floor(Math.random() * maxSize) + 1;
+    const cage = [[sr, sc]];
+    assigned[sr][sc] = true;
+
+    while (cage.length < size) {
+      // ケージ内の任意セルの未割当隣接を収集
+      const frontier = [];
+      for (const [r, c] of cage) {
+        for (const [nr, nc] of neighbors(r, c)) {
+          if (!assigned[nr][nc]) frontier.push([nr, nc]);
+        }
+      }
+      if (!frontier.length) break;
+      const [nr, nc] = frontier[Math.floor(Math.random() * frontier.length)];
+      assigned[nr][nc] = true;
+      cage.push([nr, nc]);
+    }
+
+    const { op, target } = pickOp(cage);
+    const idx = cageList.length;
+    cageList.push({ cells: cage, op, target });
+    for (const [r, c] of cage) cageMap[r][c] = idx;
+  }
+
+  return { cages: cageList, cageMap };
+}
+
+function pickDifficulty() {
+  const r = Math.random();
+  if (r < 0.33) return 'easy';
+  if (r < 0.67) return 'normal';
+  return 'hard';
+}
+
+// ─── ゲーム初期化 ────────────────────────────────────────
+function newGame() {
+  puzzleCount++;
+  difficulty = pickDifficulty();
+  solution = generateSolution();
+  const { cages: c, cageMap: cm } = buildCages(solution, difficulty);
+  cages = c;
+  cellCage = cm;
+  userGrid = Array.from({length: N}, () => Array(N).fill(0));
+  memoGrid = Array.from({length: N}, () => Array.from({length: N}, () => new Set()));
+  selected = null;
+  startTime = Date.now();
+
+  document.getElementById('puzzle-num').textContent = puzzleCount;
+  const badge = document.getElementById('diff-badge');
+  badge.textContent = difficulty === 'easy' ? '簡単' : difficulty === 'hard' ? '難しい' : '普通';
+  badge.className = 'diff-badge diff-' + (difficulty === 'easy' ? 'easy' : difficulty === 'hard' ? 'hard' : 'normal');
+
+  renderAll();
+  showMessage('');
+}
+
+function resetPuzzle() {
+  userGrid = Array.from({length: N}, () => Array(N).fill(0));
+  memoGrid = Array.from({length: N}, () => Array.from({length: N}, () => new Set()));
+  selected = null;
+  renderAll();
+  showMessage('リセットしました');
+}
+
+function nextPuzzle() {
+  document.getElementById('clear-modal').classList.remove('show');
+  newGame();
+}
+
+// ─── 描画 ───────────────────────────────────────────────
+function renderAll() {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  // 背景
+  el('rect', { x:0, y:0, width:SVG_SIZE, height:SVG_SIZE, fill:'white' }, svg);
+
+  // ケージ背景色（薄め）
+  const cagePalette = [
+    '#f0f7ff','#f5f0ff','#f0fff4','#fff7f0','#f0f9ff',
+    '#faf0ff','#f0fff8','#fffaf0','#f8f0ff','#f0f4ff',
+  ];
+  for (let ci = 0; ci < cages.length; ci++) {
+    const col = cagePalette[ci % cagePalette.length];
+    for (const [r, c] of cages[ci].cells) {
+      el('rect', {
+        x: cx(c)+0.5, y: cy(r)+0.5,
+        width: CELL-1, height: CELL-1,
+        fill: col, rx: 1
+      }, svg);
+    }
+  }
+
+  // セル状態の決定
+  const errors = computeErrors();
+  const selectedSet = getRelatedCells();
+
+  // セル選択/エラーハイライト
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const isSelected = selected && selected.r === r && selected.c === c;
+      const isError = errors.has(`${r},${c}`);
+      const isRelated = selectedSet.has(`${r},${c}`) && !isSelected;
+      const hasValue = userGrid[r][c] > 0;
+
+      let fill = 'transparent';
+      if (isSelected) fill = '#b8ddf7';
+      else if (isError && hasValue) fill = '#fde8e8';
+      else if (isRelated) fill = '#eef5fb';
+
+      if (fill !== 'transparent') {
+        el('rect', {
+          x: cx(c)+0.5, y: cy(r)+0.5,
+          width: CELL-1, height: CELL-1,
+          fill, rx: 1
+        }, svg);
+      }
+    }
+  }
+
+  // グリッド線
+  for (let i = 0; i <= N; i++) {
+    const isMajor = i % 3 === 0;
+    const sw = isMajor ? 1.8 : 0.6;
+    const sc = isMajor ? '#888' : '#ccc';
+    el('line', { x1: cx(i), y1: 0, x2: cx(i), y2: SVG_SIZE, stroke: sc, 'stroke-width': sw }, svg);
+    el('line', { x1: 0, y1: cy(i), x2: SVG_SIZE, y2: cy(i), stroke: sc, 'stroke-width': sw }, svg);
+  }
+
+  // ケージ外枠（太線）
+  for (let ci = 0; ci < cages.length; ci++) {
+    drawCageBorder(ci);
+  }
+
+  // ケージラベル
+  for (let ci = 0; ci < cages.length; ci++) {
+    const cage = cages[ci];
+    // 一番左上のセルを見つける
+    let minR = N, minC = N;
+    for (const [r, c] of cage.cells) {
+      if (r < minR || (r === minR && c < minC)) { minR = r; minC = c; }
+    }
+    const label = cage.cells.length === 1 ? `${cage.target}` : `${cage.target}${cage.op}`;
+    el('text', {
+      x: cx(minC) + 3,
+      y: cy(minR) + 3,
+      class: 'cage-label'
+    }, svg).textContent = label;
+  }
+
+  // セル内容（数字 or メモ）
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const v = userGrid[r][c];
+      const isError = errors.has(`${r},${c}`);
+      if (v > 0) {
+        el('text', {
+          x: cx(c) + CELL/2,
+          y: cy(r) + CELL/2,
+          class: 'cell-value' + (isError ? ' error' : ''),
+          fill: isError ? '#c0392b' : '#1c1a17'
+        }, svg).textContent = v;
+      } else {
+        // メモ表示
+        const memo = memoGrid[r][c];
+        if (memo.size > 0) {
+          for (let n = 1; n <= 9; n++) {
+            if (memo.has(n)) {
+              const mr = Math.floor((n-1) / 3);
+              const mc = (n-1) % 3;
+              el('text', {
+                x: cx(c) + mc * (CELL/3) + CELL/6,
+                y: cy(r) + mr * (CELL/3) + CELL/6,
+                class: 'memo-num'
+              }, svg).textContent = n;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // クリック受付用透明レイヤー
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const rect = el('rect', {
+        x: cx(c), y: cy(r),
+        width: CELL, height: CELL,
+        fill: 'transparent',
+        cursor: 'pointer'
+      }, svg);
+      rect.addEventListener('click', () => selectCell(r, c));
+    }
+  }
+}
+
+function drawCageBorder(ci) {
+  const cage = cages[ci];
+  const cellSet = new Set(cage.cells.map(([r,c]) => `${r},${c}`));
+
+  for (const [r, c] of cage.cells) {
+    const dirsLocal = [[0,1,'right'],[1,0,'bottom'],[0,-1,'left'],[-1,0,'top']];
+    for (const [dr, dc, side] of dirsLocal) {
+      const nr = r+dr, nc = c+dc;
+      if (!cellSet.has(`${nr},${nc}`)) {
+        // この辺はケージの外枠
+        let x1, y1, x2, y2;
+        if (side === 'top')    { x1=cx(c)+1; y1=cy(r)+1;      x2=cx(c+1)-1; y2=cy(r)+1; }
+        if (side === 'bottom') { x1=cx(c)+1; y1=cy(r+1)-1;    x2=cx(c+1)-1; y2=cy(r+1)-1; }
+        if (side === 'left')   { x1=cx(c)+1; y1=cy(r)+1;      x2=cx(c)+1;   y2=cy(r+1)-1; }
+        if (side === 'right')  { x1=cx(c+1)-1; y1=cy(r)+1;    x2=cx(c+1)-1; y2=cy(r+1)-1; }
+        el('line', {
+          x1, y1, x2, y2,
+          stroke: '#1a3a6a',
+          'stroke-width': 2.2,
+          'stroke-linecap': 'square'
+        }, svg);
+      }
+    }
+  }
+}
+
+function getRelatedCells() {
+  if (!selected) return new Set();
+  const { r, c } = selected;
+  const s = new Set();
+  for (let i = 0; i < N; i++) {
+    s.add(`${r},${i}`);
+    s.add(`${i},${c}`);
+  }
+  const ci = cellCage[r][c];
+  if (ci >= 0) for (const [cr, cc] of cages[ci].cells) s.add(`${cr},${cc}`);
+  return s;
+}
+
+function computeErrors() {
+  const errors = new Set();
+  for (let r = 0; r < N; r++) {
+    const rowVals = {};
+    for (let c = 0; c < N; c++) {
+      const v = userGrid[r][c];
+      if (v > 0) {
+        if (rowVals[v] !== undefined) {
+          errors.add(`${r},${c}`);
+          errors.add(`${r},${rowVals[v]}`);
+        } else rowVals[v] = c;
+      }
+    }
+  }
+  for (let c = 0; c < N; c++) {
+    const colVals = {};
+    for (let r = 0; r < N; r++) {
+      const v = userGrid[r][c];
+      if (v > 0) {
+        if (colVals[v] !== undefined) {
+          errors.add(`${r},${c}`);
+          errors.add(`${colVals[v]},${c}`);
+        } else colVals[v] = r;
+      }
+    }
+  }
+  // ケージ演算エラー（全マス埋まっているケージのみ）
+  for (let ci = 0; ci < cages.length; ci++) {
+    const cage = cages[ci];
+    const vals = cage.cells.map(([r,c]) => userGrid[r][c]);
+    if (vals.some(v => v === 0)) continue;
+    if (!checkCage(cage, vals)) {
+      for (const [r, c] of cage.cells) errors.add(`${r},${c}`);
+    }
+  }
+  return errors;
+}
+
+function checkCage(cage, vals) {
+  const { op, target } = cage;
+  if (op === '+') return vals.reduce((a,b)=>a+b,0) === target;
+  if (op === '×') return vals.reduce((a,b)=>a*b,1) === target;
+  if (op === '-') {
+    const big = Math.max(...vals), small = Math.min(...vals);
+    return big - small === target;
+  }
+  if (op === '÷') {
+    const big = Math.max(...vals), small = Math.min(...vals);
+    return small !== 0 && big % small === 0 && big / small === target;
+  }
+  return true;
+}
+
+// ─── 操作 ───────────────────────────────────────────────
+function selectCell(r, c) {
+  if (selected && selected.r === r && selected.c === c) {
+    selected = null;
+  } else {
+    selected = { r, c };
+  }
+  renderAll();
+}
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('btn-input').classList.toggle('active', m === 'input');
+  document.getElementById('btn-memo').classList.toggle('active', m === 'memo');
+}
+
+// 同じ行または列に、すでに確定している数字を集める
+function getUsedNumbers(r, c) {
+  const used = new Set();
+  for (let i = 0; i < N; i++) {
+    if (userGrid[r][i] > 0) used.add(userGrid[r][i]);
+    if (userGrid[i][c] > 0) used.add(userGrid[i][c]);
+  }
+  return used;
+}
+
+function inputNumber(n) {
+  if (!selected) { showMessage('まず入力したいマスを選んでください'); return; }
+  const { r, c } = selected;
+
+  if (n === 0) {
+    userGrid[r][c] = 0;
+    renderAll();
+    return;
+  }
+
+  if (mode === 'memo') {
+    if (userGrid[r][c] > 0) { showMessage('確定済みのマスにはメモを入れられません'); return; }
+    if (getUsedNumbers(r, c).has(n)) { showMessage(`同じ行または列に ${n} が入っているため、メモできません`); return; }
+    if (memoGrid[r][c].has(n)) memoGrid[r][c].delete(n);
+    else memoGrid[r][c].add(n);
+  } else {
+    userGrid[r][c] = n;
+    memoGrid[r][c].clear(); // 確定したらメモを消す
+    // 同行・同列のメモからnを自動削除
+    for (let i = 0; i < N; i++) {
+      memoGrid[r][i].delete(n);
+      memoGrid[i][c].delete(n);
+    }
+  }
+
+  renderAll();
+  checkComplete();
+}
+
+function fillAllMemo() {
+  if (!selected) { showMessage('まず入力したいマスを選んでください'); return; }
+  const { r, c } = selected;
+  if (userGrid[r][c] > 0) { showMessage('確定済みのマスにはメモを入れられません'); return; }
+  const used = getUsedNumbers(r, c);
+  const candidates = new Set();
+  for (let n = 1; n <= 9; n++) {
+    if (!used.has(n)) candidates.add(n);
+  }
+  memoGrid[r][c] = candidates;
+  renderAll();
+}
+
+function checkComplete() {
+  // 全マス埋まっているか
+  for (let r = 0; r < N; r++)
+    for (let c = 0; c < N; c++)
+      if (userGrid[r][c] === 0) return;
+
+  // 解答と一致するか
+  for (let r = 0; r < N; r++)
+    for (let c = 0; c < N; c++)
+      if (userGrid[r][c] !== solution[r][c]) {
+        showMessage('どこか間違いがあります。赤いマスを確認してね。');
+        return;
+      }
+
+  // クリア！
+  const elapsed = Math.round((Date.now() - startTime) / 1000);
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  document.getElementById('clear-detail').textContent =
+    `クリアタイム: ${mins > 0 ? mins + '分' : ''}${secs}秒`;
+  setTimeout(() => {
+    document.getElementById('clear-modal').classList.add('show');
+  }, 300);
+}
+
+function showMessage(msg) {
+  const el = document.getElementById('message');
+  el.textContent = msg;
+  if (msg) {
+    setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000);
+  }
+}
+
+// ─── キーボード入力 ──────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (!selected) return;
+  const { r, c } = selected;
+  const keyMap = {
+    'ArrowUp':    { r: r-1, c },
+    'ArrowDown':  { r: r+1, c },
+    'ArrowLeft':  { r, c: c-1 },
+    'ArrowRight': { r, c: c+1 },
+  };
+  if (keyMap[e.key]) {
+    const nxt = keyMap[e.key];
+    if (nxt.r >= 0 && nxt.r < N && nxt.c >= 0 && nxt.c < N) {
+      selected = nxt;
+      renderAll();
+    }
+    e.preventDefault();
+    return;
+  }
+  if (e.key >= '1' && e.key <= '9') inputNumber(parseInt(e.key));
+  if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') inputNumber(0);
+  if (e.key === 'm' || e.key === 'M') setMode(mode === 'input' ? 'memo' : 'input');
+});
+
+// ─── 数字パッド ──────────────────────────────────────────
+function buildNumpad() {
+  const pad = document.getElementById('numpad');
+  pad.innerHTML = '';
+  for (let n = 1; n <= 9; n++) {
+    const btn = document.createElement('button');
+    btn.className = 'num-key';
+    btn.textContent = n;
+    btn.onclick = () => inputNumber(n);
+    pad.appendChild(btn);
+  }
+  const del = document.createElement('button');
+  del.className = 'num-key del';
+  del.style.gridColumn = 'span 0'; // auto
+  del.innerHTML = '⌫';
+  del.title = '削除';
+  del.onclick = () => inputNumber(0);
+  // 9ボタン + delで10個、2行目の最後に配置したいので1個追加
+  pad.appendChild(del);
+}
+
+// ─── 起動 ───────────────────────────────────────────────
+buildNumpad();
+newGame();
+
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  コードの仕組み（簡単な説明）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【問題の作り方】
+1. まず「答え」のグリッド（9×9のラテン方陣）をランダムに生成します。
+   ラテン方陣とは「各行・各列に1〜9が1つずつ入る」配列のことです。
+   バックトラッキング（行き詰まったら戻る探索）で必ず完成させます。
+
+2. 完成した答えグリッドをランダムに「ケージ」に切り分けます。
+   難易度によってケージの最大サイズや演算の種類の出やすさが変わります。
+
+3. 各ケージの演算結果（+/-/×/÷）を計算してラベルを付けます。
+   問題として渡すのはこのラベルだけで、答えは非表示にします。
+   答えが既に存在するので「必ず解ける」ことが保証されます。
+
+【描画の仕組み】
+SVG（ベクター画像）を使って直接グリッドを描いています。
+セルをクリックするたびに状態が更新され、SVGを全部描き直します。
+
+【エラーチェック】
+数字を入れるたびに行・列・ケージを全部確認し、
+矛盾があるセルを赤くハイライトします（リアルタイム検証）。
+
+【メモ機能】
+各セルに「メモ用の数字セット」を持たせています。
+確定数字を入れると、そのセルと同行・同列のメモから同じ数字を自動で消します。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+</script>
+</body>
+</html>
