@@ -1,9 +1,8 @@
 <!DOCTYPE html>
 <html lang="ja">
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>KenKen 9×9</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -43,7 +42,7 @@
 
   header {
     width: 100%;
-    max-width: 400px;
+    max-width: 680px;
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -72,7 +71,7 @@
     align-items: center;
     margin-bottom: 1rem;
     width: 100%;
-    max-width: 400px;
+    max-width: 680px;
   }
 
   .pill-btn {
@@ -124,22 +123,22 @@
 
   #grid-wrap {
     position: relative;
+    width: 100%;
+    max-width: 522px; /* スマホで大きくなりすぎないように制限 */
+    aspect-ratio: 1 / 1;
     background: var(--surface);
     box-shadow: var(--shadow);
     border-radius: 4px;
     border: 2.5px solid var(--grid-bold);
     touch-action: none;
     user-select: none;
- 　  width: 100%;          
-　  max-width: 400px;   
-     /* ↓ここを追加：盤面を丸ごと85%の大きさに縮小し、真ん中に寄せる */
-     transform: scale(0.85);
-  transform-origin: top center;
-  margin-bottom: -60px; /* 縮小して浮いた下の余白を詰める */
+    margin: 0 auto; /* 中央寄せ */
   }
 
   #grid-svg {
     display: block;
+    width: 100%;
+    height: 100%;
   }
 
   .cell-bg { fill: white; }
@@ -197,12 +196,13 @@
   }
 
   #numpad {
-    display: grid;
-    grid-template-columns: repeat(9, 1fr);
-    gap: 6px;
-    margin-top: 1rem;
-    width: 100%;
-    max-width: 400px;
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 4px; /* 少し狭くする */
+  margin-top: 1rem;
+  width: 100%;
+  max-width: 522px;
+}
   }
 
   .num-key {
@@ -278,7 +278,7 @@
   .diff-normal { background: #fff3cd; color: #856404; }
   .diff-hard { background: #f8d7da; color: #842029; }
 
-  @media (max-width: 400px) {
+  @media (max-width: 540px) {
     .title { font-size: 20px; }
     #numpad { max-width: 360px; }
   }
@@ -292,16 +292,16 @@
 </header>
 
 <div id="mode-row">
-  <button class="pill-btn active" id="btn-input" onclick="setMode('input')">数字</button>
+  <button class="pill-btn active" id="btn-input" onclick="setMode('input')">数字入力</button>
   <button class="pill-btn" id="btn-memo" onclick="setMode('memo')">メモ</button>
-  <button class="action-btn" id="btn-memo-all" onclick="fillAllMemo()" title="選んでいるマスに1〜9のメモをまとめて入れます">全メモ</button>
+  <button class="action-btn" id="btn-memo-all" onclick="fillAllMemo()" title="選んでいるマスに1〜9のメモをまとめて入れます">全部メモ</button>
   <div class="spacer"></div>
-  <button class="action-btn" onclick="resetPuzzle()">reset</button>
-  <button class="action-btn primary" onclick="nextPuzzle()">Next →</button>
+  <button class="action-btn" onclick="resetPuzzle()">リセット</button>
+  <button class="action-btn primary" onclick="nextPuzzle()">次の問題 →</button>
 </div>
 
 <div id="grid-wrap">
-  <svg id="grid-svg" viewBox="0 0 450 450" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"></svg>
+  <svg id="grid-svg" viewBox="0 0 522 522" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
 
 <div id="numpad"></div>
