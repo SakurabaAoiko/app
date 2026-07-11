@@ -15,10 +15,13 @@
     --surface: #ffffff;
     --grid-line: #c8c4bc;
     --grid-bold: #2c2a26;
+    --grid-major: #888888;
     --cell-hover: #e8f4fd;
     --cell-selected: #b8ddf7;
+    --cell-related: #eef5fb;
     --cell-memo-bg: #f0f7ff;
     --cage-label: #1a5fa8;
+    --cage-border: #1a3a6a;
     --error-bg: #fde8e8;
     --error-text: #c0392b;
     --correct-bg: #e8f8ed;
@@ -31,6 +34,33 @@
     --memo-color: #da70d6;
     --shadow: 0 2px 12px rgba(0,0,0,0.10);
   }
+
+  html[data-theme="dark"] {
+    --bg: #0e0e12;
+    --surface: #1b1b21;
+    --grid-line: #34343d;
+    --grid-bold: #6a6a76;
+    --grid-major: #5c5c68;
+    --cell-hover: #22262e;
+    --cell-selected: #1f5fd1;
+    --cell-related: #182437;
+    --cell-memo-bg: #1b2330;
+    --cage-label: #6fa8ff;
+    --cage-border: #4c8dff;
+    --error-bg: #3a1f22;
+    --error-text: #ff6b6b;
+    --correct-bg: #163a24;
+    --ink: #eceae4;
+    --ink-muted: #9b9890;
+    --accent: #4c8dff;
+    --accent-light: #16283f;
+    --btn-bg: #eceae4;
+    --btn-text: #14141a;
+    --memo-color: #c79bec;
+    --shadow: 0 2px 14px rgba(0,0,0,0.55);
+  }
+
+  html[data-theme="dark"] body { background: var(--bg); }
 
   body {
     background: var(--bg);
@@ -290,16 +320,20 @@
 
 <header>
   <div class="title">Ken<span>Ken</span> <small style="font-size:14px;color:var(--ink-muted);font-weight:400;">9×9</small></div>
-  <div id="status-bar">問題 #<span id="puzzle-num">1</span> &nbsp;<span id="diff-badge" class="diff-badge diff-normal">普通</span></div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div id="status-bar">問題 #<span id="puzzle-num">1</span> &nbsp;<span id="diff-badge" class="diff-badge diff-normal">普通</span></div>
+    <button id="theme-toggle" class="action-btn" onclick="toggleTheme()" title="表示切り替え(ダーク/ライト)">🌙</button>
+  </div>
 </header>
 
 <div id="mode-row">
-  <button class="pill-btn active" id="btn-input" onclick="setMode('input')">数字入力</button>
+  <button class="pill-btn active" id="btn-input" onclick="setMode('input')">数字</button>
   <button class="pill-btn" id="btn-memo" onclick="setMode('memo')">メモ</button>
-  <button class="action-btn" id="btn-memo-all" onclick="fillAllMemo()" title="選んでいるマスに1〜9のメモをまとめて入れます">全部メモ</button>
+  <button class="action-btn" id="btn-memo-all" onclick="fillAllMemo()" title="選んでいるマスに1〜9のメモをまとめて入れます">全メモ</button>
   <div class="spacer"></div>
-  <button class="action-btn" onclick="resetPuzzle()">リセット</button>
-  <button class="action-btn primary" onclick="nextPuzzle()">次の問題 →</button>
+  <button class="action-btn" id="btn-undo" onclick="undo()" title="ひとつ前の状態に戻します">↶ UNDO</button>
+  <button class="action-btn" onclick="resetPuzzle()">reset</button>
+  <button class="action-btn primary" onclick="nextPuzzle()">Next →</button>
 </div>
 
 <div id="grid-wrap">
@@ -338,6 +372,8 @@ let selected = null;  // {r, c}
 let puzzleCount = 0;
 let startTime = 0;
 let difficulty = 'normal';
+let theme = 'light';
+let undoStack = [];   // 元に戻すための履歴
 
 // ─── SVG ヘルパー ────────────────────────────────────────
 const svg = document.getElementById('grid-svg');
@@ -351,6 +387,61 @@ function el(tag, attrs = {}, parent = null) {
 
 function cx(c) { return c * CELL; }
 function cy(r) { return r * CELL; }
+
+// CSSの色変数を読み取る(テーマに合わせて盤面の色を自動で合わせるため)
+function cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+// ─── テーマ(ダーク/ライト) ─────────────────────────────
+function applyTheme(t) {
+  theme = t;
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('kenken-theme', t); } catch (e) { /* 保存できなくても続行 */ }
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+  if (typeof solution !== 'undefined' && solution.length) renderAll();
+}
+
+function toggleTheme() {
+  applyTheme(theme === 'dark' ? 'light' : 'dark');
+}
+
+function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem('kenken-theme'); } catch (e) { /* 読めなくても続行 */ }
+  if (saved === 'light' || saved === 'dark') {
+    theme = saved;
+  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    theme = 'dark';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+// ─── 元に戻す(アンドゥ) ────────────────────────────────
+function snapshotState() {
+  return {
+    userGrid: userGrid.map(row => row.slice()),
+    memoGrid: memoGrid.map(row => row.map(s => new Set(s))),
+  };
+}
+
+function pushUndo() {
+  undoStack.push(snapshotState());
+  if (undoStack.length > 100) undoStack.shift();
+}
+
+function undo() {
+  if (undoStack.length === 0) { showMessage('これ以上は戻せません'); return; }
+  const prev = undoStack.pop();
+  userGrid = prev.userGrid;
+  memoGrid = prev.memoGrid;
+  renderAll();
+  showMessage('ひとつ前に戻しました');
+}
 
 // ─── 問題生成 ──────────────────────────────────────────
 function shuffle(arr) {
@@ -498,6 +589,7 @@ function newGame() {
   memoGrid = Array.from({length: N}, () => Array.from({length: N}, () => new Set()));
   selected = null;
   startTime = Date.now();
+  undoStack = [];
 
   document.getElementById('puzzle-num').textContent = puzzleCount;
   const badge = document.getElementById('diff-badge');
@@ -512,6 +604,7 @@ function resetPuzzle() {
   userGrid = Array.from({length: N}, () => Array(N).fill(0));
   memoGrid = Array.from({length: N}, () => Array.from({length: N}, () => new Set()));
   selected = null;
+  undoStack = [];
   renderAll();
   showMessage('リセットしました');
 }
@@ -525,14 +618,25 @@ function nextPuzzle() {
 function renderAll() {
   while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-  // 背景
-  el('rect', { x:0, y:0, width:SVG_SIZE, height:SVG_SIZE, fill:'white' }, svg);
+  // 現在のテーマ色を読み取る
+  const colSurface = cssVar('--surface', '#ffffff');
+  const colSelected = cssVar('--cell-selected', '#b8ddf7');
+  const colErrorBg = cssVar('--error-bg', '#fde8e8');
+  const colRelated = cssVar('--cell-related', '#eef5fb');
+  const colGridMajor = cssVar('--grid-major', '#888888');
+  const colGridMinor = cssVar('--grid-line', '#cccccc');
+  const colInk = cssVar('--ink', '#1c1a17');
+  const colErrorText = cssVar('--error-text', '#c0392b');
 
-  // ケージ背景色（薄め）
-  const cagePalette = [
-    '#f0f7ff','#f5f0ff','#f0fff4','#fff7f0','#f0f9ff',
-    '#faf0ff','#f0fff8','#fffaf0','#f8f0ff','#f0f4ff',
-  ];
+  // 背景
+  el('rect', { x:0, y:0, width:SVG_SIZE, height:SVG_SIZE, fill:colSurface }, svg);
+
+  // ケージ背景色（薄め）※ダークモードでは少し落ち着いた色合いにする
+  const cagePalette = theme === 'dark'
+    ? ['#202634','#262032','#1f2b26','#2c2620','#1e2830',
+       '#2a2032','#1f2c28','#2c2820','#28202c','#202230']
+    : ['#f0f7ff','#f5f0ff','#f0fff4','#fff7f0','#f0f9ff',
+       '#faf0ff','#f0fff8','#fffaf0','#f8f0ff','#f0f4ff'];
   for (let ci = 0; ci < cages.length; ci++) {
     const col = cagePalette[ci % cagePalette.length];
     for (const [r, c] of cages[ci].cells) {
@@ -557,9 +661,9 @@ function renderAll() {
       const hasValue = userGrid[r][c] > 0;
 
       let fill = 'transparent';
-      if (isSelected) fill = '#b8ddf7';
-      else if (isError && hasValue) fill = '#fde8e8';
-      else if (isRelated) fill = '#eef5fb';
+      if (isSelected) fill = colSelected;
+      else if (isError && hasValue) fill = colErrorBg;
+      else if (isRelated) fill = colRelated;
 
       if (fill !== 'transparent') {
         el('rect', {
@@ -575,7 +679,7 @@ function renderAll() {
   for (let i = 0; i <= N; i++) {
     const isMajor = i % 3 === 0;
     const sw = isMajor ? 1.8 : 0.6;
-    const sc = isMajor ? '#888' : '#ccc';
+    const sc = isMajor ? colGridMajor : colGridMinor;
     el('line', { x1: cx(i), y1: 0, x2: cx(i), y2: SVG_SIZE, stroke: sc, 'stroke-width': sw }, svg);
     el('line', { x1: 0, y1: cy(i), x2: SVG_SIZE, y2: cy(i), stroke: sc, 'stroke-width': sw }, svg);
   }
@@ -611,7 +715,7 @@ function renderAll() {
           x: cx(c) + CELL/2,
           y: cy(r) + CELL/2,
           class: 'cell-value' + (isError ? ' error' : ''),
-          fill: isError ? '#c0392b' : '#1c1a17'
+          fill: isError ? colErrorText : colInk
         }, svg).textContent = v;
       } else {
         // メモ表示
@@ -664,7 +768,7 @@ function drawCageBorder(ci) {
         if (side === 'right')  { x1=cx(c+1)-1; y1=cy(r)+1;    x2=cx(c+1)-1; y2=cy(r+1)-1; }
         el('line', {
           x1, y1, x2, y2,
-          stroke: '#1a3a6a',
+          stroke: cssVar('--cage-border', '#1a3a6a'),
           'stroke-width': 2.2,
           'stroke-linecap': 'square'
         }, svg);
@@ -770,6 +874,7 @@ function inputNumber(n) {
   const { r, c } = selected;
 
   if (n === 0) {
+    pushUndo();
     userGrid[r][c] = 0;
     renderAll();
     return;
@@ -778,9 +883,11 @@ function inputNumber(n) {
   if (mode === 'memo') {
     if (userGrid[r][c] > 0) { showMessage('確定済みのマスにはメモを入れられません'); return; }
     if (getUsedNumbers(r, c).has(n)) { showMessage(`同じ行または列に ${n} が入っているため、メモできません`); return; }
+    pushUndo();
     if (memoGrid[r][c].has(n)) memoGrid[r][c].delete(n);
     else memoGrid[r][c].add(n);
   } else {
+    pushUndo();
     userGrid[r][c] = n;
     memoGrid[r][c].clear(); // 確定したらメモを消す
     // 同行・同列のメモからnを自動削除
@@ -798,6 +905,7 @@ function fillAllMemo() {
   if (!selected) { showMessage('まず入力したいマスを選んでください'); return; }
   const { r, c } = selected;
   if (userGrid[r][c] > 0) { showMessage('確定済みのマスにはメモを入れられません'); return; }
+  pushUndo();
   const used = getUsedNumbers(r, c);
   const candidates = new Set();
   for (let n = 1; n <= 9; n++) {
@@ -842,6 +950,11 @@ function showMessage(msg) {
 
 // ─── キーボード入力 ──────────────────────────────────────
 document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault();
+    undo();
+    return;
+  }
   if (!selected) return;
   const { r, c } = selected;
   const keyMap = {
@@ -886,6 +999,7 @@ function buildNumpad() {
 }
 
 // ─── 起動 ───────────────────────────────────────────────
+initTheme();
 buildNumpad();
 newGame();
 
