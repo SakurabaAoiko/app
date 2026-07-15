@@ -98,7 +98,7 @@
     color: var(--ink-muted);
   }
 
-  #mode-row {
+  #mode-row, #top-row {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
@@ -106,6 +106,11 @@
     margin-bottom: 1rem;
     width: 100%;
     max-width: 680px;
+  }
+
+  #mode-row {
+    max-width: 522px;
+    margin-top: 1rem;
   }
 
   .pill-btn {
@@ -193,7 +198,7 @@
   .cell-value.error { fill: var(--error-text); }
 
   .memo-num {
-    font-size: 13px;
+    font-size: 11px;
     fill: var(--memo-color);
     dominant-baseline: central;
     text-anchor: middle;
@@ -203,7 +208,7 @@
   }
 
   .cage-label {
-    font-size: 15px;
+    font-size: 11px;
     fill: var(--cage-label);
     dominant-baseline: hanging;
     text-anchor: start;
@@ -326,18 +331,22 @@
   </div>
 </header>
 
-<div id="mode-row">
-  <button class="pill-btn active" id="btn-input" onclick="setMode('input')">数字</button>
-  <button class="pill-btn" id="btn-memo" onclick="setMode('memo')">メモ</button>
-  <button class="action-btn" id="btn-memo-all" onclick="fillAllMemo()" title="選んでいるマスに1〜9のメモをまとめて入れます">全メモ</button>
-  <div class="spacer"></div>
-  <button class="action-btn" id="btn-undo" onclick="undo()" title="ひとつ前の状態に戻します">↶ UNDO</button>
+<div id="top-row">
+  <button class="action-btn" id="btn-undo" onclick="undo()" title="ひとつ前の状態に戻します">↶ undo</button>
   <button class="action-btn" onclick="resetPuzzle()">reset</button>
+  <div class="spacer"></div>
   <button class="action-btn primary" onclick="nextPuzzle()">Next →</button>
 </div>
 
 <div id="grid-wrap">
   <svg id="grid-svg" viewBox="0 0 522 522" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<div id="mode-row">
+  <button class="pill-btn active" id="btn-input" onclick="setMode('input')">数字</button>
+  <button class="pill-btn" id="btn-memo" onclick="setMode('memo')">メモ</button>
+  <button class="action-btn" id="btn-memo-all" onclick="fillAllMemo()" title="選んでいるマスに1〜9のメモをまとめて入れます">全メモ</button>
+  <button class="action-btn" id="btn-check" onclick="checkAnswers()" title="今入力した数字が正しいか確認します">Check</button>
 </div>
 
 <div id="numpad"></div>
@@ -374,6 +383,7 @@ let startTime = 0;
 let difficulty = 'normal';
 let theme = 'light';
 let undoStack = [];   // 元に戻すための履歴
+let checkedWrongCells = null; // 正誤チェックで見つかった間違いのマス
 
 // ─── SVG ヘルパー ────────────────────────────────────────
 const svg = document.getElementById('grid-svg');
@@ -432,6 +442,7 @@ function snapshotState() {
 function pushUndo() {
   undoStack.push(snapshotState());
   if (undoStack.length > 100) undoStack.shift();
+  checkedWrongCells = null;
 }
 
 function undo() {
@@ -439,8 +450,27 @@ function undo() {
   const prev = undoStack.pop();
   userGrid = prev.userGrid;
   memoGrid = prev.memoGrid;
+  checkedWrongCells = null;
   renderAll();
   showMessage('ひとつ前に戻しました');
+}
+
+// ─── 正誤チェック ───────────────────────────────────────
+function checkAnswers() {
+  let anyFilled = false;
+  const wrong = new Set();
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (userGrid[r][c] > 0) {
+        anyFilled = true;
+        if (userGrid[r][c] !== solution[r][c]) wrong.add(`${r},${c}`);
+      }
+    }
+  }
+  if (!anyFilled) { showMessage('まだ数字が入力されていません'); return; }
+  checkedWrongCells = wrong;
+  renderAll();
+  showMessage(wrong.size === 0 ? '今のところ間違いはありません' : `間違っている数字が ${wrong.size} マスあります`);
 }
 
 // ─── 問題生成 ──────────────────────────────────────────
@@ -590,6 +620,7 @@ function newGame() {
   selected = null;
   startTime = Date.now();
   undoStack = [];
+  checkedWrongCells = null;
 
   document.getElementById('puzzle-num').textContent = puzzleCount;
   const badge = document.getElementById('diff-badge');
@@ -605,6 +636,7 @@ function resetPuzzle() {
   memoGrid = Array.from({length: N}, () => Array.from({length: N}, () => new Set()));
   selected = null;
   undoStack = [];
+  checkedWrongCells = null;
   renderAll();
   showMessage('リセットしました');
 }
@@ -650,6 +682,9 @@ function renderAll() {
 
   // セル状態の決定
   const errors = computeErrors();
+  if (checkedWrongCells) {
+    for (const key of checkedWrongCells) errors.add(key);
+  }
   const selectedSet = getRelatedCells();
 
   // セル選択/エラーハイライト
@@ -721,13 +756,16 @@ function renderAll() {
         // メモ表示
         const memo = memoGrid[r][c];
         if (memo.size > 0) {
+          const memoTop = 13; // ケージ数字の分だけ上を空ける
+          const rowH = (CELL - memoTop) / 3;
+          const colW = CELL / 3;
           for (let n = 1; n <= 9; n++) {
             if (memo.has(n)) {
               const mr = Math.floor((n-1) / 3);
               const mc = (n-1) % 3;
               el('text', {
-                x: cx(c) + mc * (CELL/3) + CELL/6,
-                y: cy(r) + mr * (CELL/3) + CELL/6,
+                x: cx(c) + mc * colW + colW / 2,
+                y: cy(r) + memoTop + mr * rowH + rowH / 2,
                 class: 'memo-num'
               }, svg).textContent = n;
             }
