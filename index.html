@@ -62,6 +62,10 @@
 
   html[data-theme="dark"] body { background: var(--bg); }
 
+  html {
+    touch-action: manipulation;
+  }
+
   body {
     background: var(--bg);
     font-family: 'Helvetica Neue', 'Arial', sans-serif;
@@ -71,6 +75,7 @@
     align-items: center;
     padding: 1.5rem 1rem 3rem;
     color: var(--ink);
+    touch-action: manipulation;
   }
 
   header {
@@ -123,6 +128,7 @@
     cursor: pointer;
     transition: background 0.13s, border-color 0.13s;
     color: var(--ink);
+    touch-action: manipulation;
   }
 
   .pill-btn.active {
@@ -148,6 +154,7 @@
     cursor: pointer;
     color: var(--ink);
     transition: background 0.12s;
+    touch-action: manipulation;
   }
 
   .action-btn:hover { background: #ede9e2; }
@@ -256,6 +263,7 @@
     justify-content: center;
     transition: background 0.1s, transform 0.08s;
     box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+    touch-action: manipulation;
   }
 
   .num-key:hover { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
@@ -332,10 +340,10 @@
 </header>
 
 <div id="top-row">
-  <button class="action-btn" id="btn-undo" onclick="undo()" title="ひとつ前の状態に戻します">↶ undo</button>
-  <button class="action-btn" onclick="resetPuzzle()">reset</button>
+  <button class="action-btn" id="btn-undo" onclick="undo()" title="ひとつ前の状態に戻します">↶ 元に戻す</button>
+  <button class="action-btn" onclick="resetPuzzle()">リセット</button>
   <div class="spacer"></div>
-  <button class="action-btn primary" onclick="nextPuzzle()">Next →</button>
+  <button class="action-btn primary" onclick="nextPuzzle()">次の問題 →</button>
 </div>
 
 <div id="grid-wrap">
@@ -343,10 +351,10 @@
 </div>
 
 <div id="mode-row">
-  <button class="pill-btn active" id="btn-input" onclick="setMode('input')">数字</button>
+  <button class="pill-btn active" id="btn-input" onclick="setMode('input')">数字入力</button>
   <button class="pill-btn" id="btn-memo" onclick="setMode('memo')">メモ</button>
-  <button class="action-btn" id="btn-memo-all" onclick="fillAllMemo()" title="選んでいるマスに1〜9のメモをまとめて入れます">全メモ</button>
-  <button class="action-btn" id="btn-check" onclick="checkAnswers()" title="今入力した数字が正しいか確認します">Check</button>
+  <button class="action-btn" id="btn-memo-all" onclick="fillAllMemo()" title="選んでいるマスに1〜9のメモをまとめて入れます">全部メモ</button>
+  <button class="action-btn" id="btn-check" onclick="checkAnswers()" title="今入力した数字が正しいか確認します">正誤</button>
 </div>
 
 <div id="numpad"></div>
