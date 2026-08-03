@@ -215,7 +215,7 @@
   }
 
   .cage-label {
-    font-size: 15px;
+    font-size: 11px;
     fill: var(--cage-label);
     dominant-baseline: hanging;
     text-anchor: start;
@@ -321,6 +321,7 @@
 
   .diff-easy { background: #d4edda; color: #1a6e30; }
   .diff-normal { background: #fff3cd; color: #856404; }
+  .diff-hardish { background: #ffe3c2; color: #a3480a; }
   .diff-hard { background: #f8d7da; color: #842029; }
 
   @media (max-width: 540px) {
@@ -533,6 +534,9 @@ function buildCages(sol, diff) {
   } else if (diff === 'hard') {
     maxSize = 6;
     opWeights = [0.3, 0.2, 0.3, 0.2];
+  } else if (diff === 'hardish') {
+    maxSize = 5;
+    opWeights = [0.38, 0.2, 0.27, 0.15];
   } else {
     maxSize = 4;
     opWeights = [0.45, 0.2, 0.25, 0.1];
@@ -610,8 +614,9 @@ function buildCages(sol, diff) {
 
 function pickDifficulty() {
   const r = Math.random();
-  if (r < 0.33) return 'easy';
-  if (r < 0.67) return 'normal';
+  if (r < 0.25) return 'easy';
+  if (r < 0.5) return 'normal';
+  if (r < 0.75) return 'hardish';
   return 'hard';
 }
 
@@ -631,9 +636,10 @@ function newGame() {
   checkedWrongCells = null;
 
   document.getElementById('puzzle-num').textContent = puzzleCount;
+  const diffLabels = { easy: '簡単', normal: '普通', hardish: 'やや難しい', hard: '難しい' };
   const badge = document.getElementById('diff-badge');
-  badge.textContent = difficulty === 'easy' ? '簡単' : difficulty === 'hard' ? '難しい' : '普通';
-  badge.className = 'diff-badge diff-' + (difficulty === 'easy' ? 'easy' : difficulty === 'hard' ? 'hard' : 'normal');
+  badge.textContent = diffLabels[difficulty] || '普通';
+  badge.className = 'diff-badge diff-' + difficulty;
 
   renderAll();
   showMessage('');
