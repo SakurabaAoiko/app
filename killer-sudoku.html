@@ -82,7 +82,7 @@
 
   #status-bar { font-size: 13px; color: var(--ink-muted); white-space: nowrap; }
 
-  #mode-row, #top-row {
+  #top-row {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
@@ -93,23 +93,6 @@
   }
 
   #top-row { max-width: 522px; }
-
-  #mode-row { max-width: 522px; margin-top: 1rem; }
-
-  .pill-btn {
-    padding: 6px 16px;
-    border-radius: 99px;
-    border: 1.5px solid var(--grid-line);
-    background: var(--surface);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.13s, border-color 0.13s;
-    color: var(--ink);
-    touch-action: manipulation;
-  }
-
-  .pill-btn.active { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); }
 
   .spacer { flex: 1; }
 
@@ -167,15 +150,6 @@
     dominant-baseline: central;
     text-anchor: middle;
     pointer-events: none;
-  }
-
-  .memo-num {
-    font-size: 11px;
-    fill: var(--memo-color);
-    dominant-baseline: central;
-    text-anchor: middle;
-    pointer-events: none;
-    font-weight: 800;
   }
 
   .cage-label {
@@ -286,13 +260,6 @@
 <div id="grid-wrap">
   <svg id="grid-svg" viewBox="0 0 522 522" xmlns="http://www.w3.org/2000/svg"></svg>
   <div id="loading" class="show">問題をつくっています…</div>
-</div>
-
-<div id="mode-row">
-  <button class="pill-btn active" id="btn-input" onclick="setMode('input')">数字入力</button>
-  <button class="pill-btn" id="btn-memo" onclick="setMode('memo')">メモ</button>
-  <button class="action-btn" id="btn-memo-all" onclick="fillAllMemo()" title="選んでいるマスに入れられる数字を、メモとしてまとめて入れます">全部メモ</button>
-  <button class="action-btn" id="btn-check" onclick="checkAnswers()" title="今入力した数字が正しいか確認します">正誤</button>
 </div>
 
 <div id="numpad"></div>
@@ -720,14 +687,11 @@ let solution = [];    // [r][c] = 1..9
 let cages = [];       // [{cells:[[r,c],...], sum}]
 let cellCage = [];    // [r][c] = ケージの番号
 let userGrid = [];    // [r][c] = 0 または 1..9
-let memoGrid = [];    // [r][c] = メモの数字の集まり
-let mode = 'input';
 let selected = null;  // {r, c}
 let puzzleCount = 0;
 let startTime = 0;
 let theme = 'light';
 let undoStack = [];
-let checkedWrongCells = null;
 
 const svg = document.getElementById('grid-svg');
 
@@ -771,44 +735,15 @@ function initTheme() {
 }
 
 // ─── 元に戻す ───────────────────────────────────────────
-function snapshotState() {
-  return {
-    userGrid: userGrid.map(row => row.slice()),
-    memoGrid: memoGrid.map(row => row.map(s => new Set(s))),
-  };
-}
 function pushUndo() {
-  undoStack.push(snapshotState());
+  undoStack.push(userGrid.map(row => row.slice()));
   if (undoStack.length > 200) undoStack.shift();
-  checkedWrongCells = null;
 }
 function undo() {
   if (undoStack.length === 0) { showMessage('これ以上は戻せません'); return; }
-  const prev = undoStack.pop();
-  userGrid = prev.userGrid;
-  memoGrid = prev.memoGrid;
-  checkedWrongCells = null;
+  userGrid = undoStack.pop();
   renderAll();
   showMessage('ひとつ前に戻しました');
-}
-
-// ─── 正誤チェック ───────────────────────────────────────
-function checkAnswers() {
-  if (!solution.length) return;
-  let anyFilled = false;
-  const wrong = new Set();
-  for (let r = 0; r < N; r++) {
-    for (let c = 0; c < N; c++) {
-      if (userGrid[r][c] > 0) {
-        anyFilled = true;
-        if (userGrid[r][c] !== solution[r][c]) wrong.add(`${r},${c}`);
-      }
-    }
-  }
-  if (!anyFilled) { showMessage('まだ数字が入力されていません'); return; }
-  checkedWrongCells = wrong;
-  renderAll();
-  showMessage(wrong.size === 0 ? '今のところ間違いはありません' : `間違っている数字が ${wrong.size} マスあります`);
 }
 
 // ─── 問題づくり(画面の裏側で動かす) ───────────────────
@@ -891,10 +826,8 @@ function startPuzzle(p) {
 
 function clearProgress() {
   userGrid = Array.from({ length: N }, () => Array(N).fill(0));
-  memoGrid = Array.from({ length: N }, () => Array.from({ length: N }, () => new Set()));
   selected = null;
   undoStack = [];
-  checkedWrongCells = null;
 }
 
 function resetPuzzle() {
@@ -936,7 +869,6 @@ function renderAll() {
   el('rect', { x: 0, y: 0, width: SVG_SIZE, height: SVG_SIZE, fill: colSurface }, svg);
 
   const errors = computeErrors();
-  if (checkedWrongCells) for (const key of checkedWrongCells) errors.add(key);
   const related = getRelatedCells();
 
   // マスの背景(選んだマス・同じ行や列やブロック・間違い)
@@ -976,7 +908,7 @@ function renderAll() {
     el('text', { x: cx(minC) + 6, y: cy(minR) + 6, class: 'cage-label' }, svg).textContent = cages[ci].sum;
   }
 
-  // 数字とメモ
+  // 数字(間違った数字はすぐ赤くなる)
   for (let r = 0; r < N; r++) {
     for (let c = 0; c < N; c++) {
       const v = userGrid[r][c];
@@ -987,22 +919,6 @@ function renderAll() {
           class: 'cell-value',
           fill: isError ? colErrorText : colInk,
         }, svg).textContent = v;
-      } else {
-        const memo = memoGrid[r][c];
-        if (memo.size > 0) {
-          const memoTop = 16;                       // 合計の数字と重ならないように上を空ける
-          const rowH = (CELL - memoTop - 2) / 3;
-          const colW = CELL / 3;
-          for (let n = 1; n <= 9; n++) {
-            if (!memo.has(n)) continue;
-            const mr = Math.floor((n - 1) / 3), mc = (n - 1) % 3;
-            el('text', {
-              x: cx(c) + mc * colW + colW / 2,
-              y: cy(r) + memoTop + mr * rowH + rowH / 2,
-              class: 'memo-num',
-            }, svg).textContent = n;
-          }
-        }
       }
     }
   }
@@ -1087,33 +1003,14 @@ function getRelatedCells() {
   return s;
 }
 
-// ─── ルール違反の判定 ───────────────────────────────────
+// ─── 間違いの判定 ───────────────────────────────────────
+// 正しい答えと違う数字は、入れた瞬間に赤くなります
 function computeErrors() {
   const errors = new Set();
-  if (!cages.length) return errors;
-
-  function markDuplicates(list) {
-    const seen = {};
-    for (const [r, c] of list) {
-      const v = userGrid[r][c];
-      if (!v) continue;
-      if (seen[v]) { errors.add(`${r},${c}`); errors.add(seen[v]); }
-      else seen[v] = `${r},${c}`;
-    }
-  }
-
-  for (let i = 0; i < N; i++) {
-    markDuplicates(Array.from({ length: N }, (_, k) => [i, k]));   // 行
-    markDuplicates(Array.from({ length: N }, (_, k) => [k, i]));   // 列
-    const br = Math.floor(i / 3) * 3, bc = (i % 3) * 3;            // ブロック
-    markDuplicates(Array.from({ length: N }, (_, k) => [br + Math.floor(k / 3), bc + (k % 3)]));
-  }
-
-  for (const cage of cages) {
-    markDuplicates(cage.cells);
-    const vals = cage.cells.map(([r, c]) => userGrid[r][c]);
-    if (vals.every(v => v > 0) && vals.reduce((a, b) => a + b, 0) !== cage.sum) {
-      for (const [r, c] of cage.cells) errors.add(`${r},${c}`);
+  if (!solution.length) return errors;
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (userGrid[r][c] > 0 && userGrid[r][c] !== solution[r][c]) errors.add(`${r},${c}`);
     }
   }
   return errors;
@@ -1126,75 +1023,21 @@ function selectCell(r, c) {
   renderAll();
 }
 
-function setMode(m) {
-  mode = m;
-  document.getElementById('btn-input').classList.toggle('active', m === 'input');
-  document.getElementById('btn-memo').classList.toggle('active', m === 'memo');
-}
-
-// そのマスに入れられない数字(同じ行・列・ブロック・ケージにすでに入っている数字)
-function getUsedNumbers(r, c) {
-  const used = new Set();
-  for (let i = 0; i < N; i++) {
-    if (userGrid[r][i] > 0) used.add(userGrid[r][i]);
-    if (userGrid[i][c] > 0) used.add(userGrid[i][c]);
-  }
-  const b = boxOf(r, c);
-  for (let rr = 0; rr < N; rr++) for (let cc = 0; cc < N; cc++)
-    if (boxOf(rr, cc) === b && userGrid[rr][cc] > 0) used.add(userGrid[rr][cc]);
-  const ci = cellCage[r][c];
-  if (ci >= 0) for (const [cr, cc] of cages[ci].cells) if (userGrid[cr][cc] > 0) used.add(userGrid[cr][cc]);
-  return used;
-}
-
 function inputNumber(n) {
   if (!cages.length) return;
   if (!selected) { showMessage('まず入力したいマスを選んでください'); return; }
   const { r, c } = selected;
 
-  if (n === 0) {   // 消す:数字があれば数字を、なければメモを消す
-    if (userGrid[r][c] > 0) { pushUndo(); userGrid[r][c] = 0; }
-    else if (memoGrid[r][c].size > 0) { pushUndo(); memoGrid[r][c].clear(); }
-    renderAll();
+  if (n === 0) {   // 消す
+    if (userGrid[r][c] > 0) { pushUndo(); userGrid[r][c] = 0; renderAll(); }
     return;
   }
+  if (userGrid[r][c] === n) return;
 
-  if (mode === 'memo') {
-    if (userGrid[r][c] > 0) { showMessage('確定済みのマスにはメモを入れられません'); return; }
-    if (getUsedNumbers(r, c).has(n)) {
-      showMessage(`同じ行・列・ブロック・ケージに ${n} が入っているため、メモできません`);
-      return;
-    }
-    pushUndo();
-    if (memoGrid[r][c].has(n)) memoGrid[r][c].delete(n);
-    else memoGrid[r][c].add(n);
-  } else {
-    pushUndo();
-    userGrid[r][c] = n;
-    memoGrid[r][c].clear();
-    // 関係するマスのメモから、同じ数字を自動で消す
-    for (let i = 0; i < N; i++) { memoGrid[r][i].delete(n); memoGrid[i][c].delete(n); }
-    const b = boxOf(r, c);
-    for (let rr = 0; rr < N; rr++) for (let cc = 0; cc < N; cc++) if (boxOf(rr, cc) === b) memoGrid[rr][cc].delete(n);
-    const ci = cellCage[r][c];
-    if (ci >= 0) for (const [cr, cc] of cages[ci].cells) memoGrid[cr][cc].delete(n);
-  }
-
+  pushUndo();
+  userGrid[r][c] = n;
   renderAll();
   checkComplete();
-}
-
-function fillAllMemo() {
-  if (!cages.length) return;
-  if (!selected) { showMessage('まず入力したいマスを選んでください'); return; }
-  const { r, c } = selected;
-  if (userGrid[r][c] > 0) { showMessage('確定済みのマスにはメモを入れられません'); return; }
-  pushUndo();
-  const used = getUsedNumbers(r, c);
-  const candidates = new Set();
-  for (let n = 1; n <= 9; n++) if (!used.has(n)) candidates.add(n);
-  memoGrid[r][c] = candidates;
-  renderAll();
 }
 
 function checkComplete() {
@@ -1234,7 +1077,6 @@ document.addEventListener('keydown', e => {
   }
   if (e.key >= '1' && e.key <= '9') inputNumber(parseInt(e.key, 10));
   if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') inputNumber(0);
-  if (e.key === 'm' || e.key === 'M') setMode(mode === 'input' ? 'memo' : 'input');
 });
 
 // ─── 数字パッド ─────────────────────────────────────────
@@ -1269,6 +1111,9 @@ requestPuzzle();
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   コードの仕組み(かんたんな説明)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【間違いの表示】
+  入れた数字が正しい答えと違うと、その場で赤くなります。
 
 【遊び方のルール】
   ・どの行・列・3×3のブロックにも、1〜9が1回ずつ入ります。
