@@ -16,7 +16,8 @@
     --grid-line: #c8c4bc;
     --grid-bold: #2c2a26;
     --cell-selected: #b8ddf7;
-    --cell-related: #eef5fb;
+    --cell-related: #d2d2d8;
+    --cell-same: #d2d2d8;
     --cage-label: #1a5fa8;
     --cage-dash: #6b7a99;
     --error-bg: #fde8e8;
@@ -38,7 +39,8 @@
     --grid-line: #34343d;
     --grid-bold: #6a6a76;
     --cell-selected: #1f5fd1;
-    --cell-related: #182437;
+    --cell-related: #050507;
+    --cell-same: #050507;
     --cage-label: #8fb8ff;
     --cage-dash: #7d869a;
     --error-bg: #3a1f22;
@@ -852,15 +854,14 @@ function nextPuzzle() {
 }
 
 // ─── 盤面の描画 ─────────────────────────────────────────
-function boxOf(r, c) { return Math.floor(r / 3) * 3 + Math.floor(c / 3); }
-
 function renderAll() {
   while (svg.firstChild) svg.removeChild(svg.firstChild);
 
   const colSurface = cssVar('--surface', '#ffffff');
   const colSelected = cssVar('--cell-selected', '#b8ddf7');
   const colErrorBg = cssVar('--error-bg', '#fde8e8');
-  const colRelated = cssVar('--cell-related', '#eef5fb');
+  const colRelated = cssVar('--cell-related', '#d2d2d8');
+  const colSame = cssVar('--cell-same', '#d2d2d8');
   const colGrid = cssVar('--grid-line', '#cccccc');
   const colBold = cssVar('--grid-bold', '#2c2a26');
   const colInk = cssVar('--ink', '#1c1a17');
@@ -870,6 +871,7 @@ function renderAll() {
 
   const errors = computeErrors();
   const related = getRelatedCells();
+  const same = getSameDigitCells();
 
   // マスの背景(選んだマス・同じ行や列やブロック・間違い)
   for (let r = 0; r < N; r++) {
@@ -879,6 +881,7 @@ function renderAll() {
       let fill = null;
       if (isSelected) fill = colSelected;
       else if (isError) fill = colErrorBg;
+      else if (same.has(`${r},${c}`)) fill = colSame;
       else if (related.has(`${r},${c}`)) fill = colRelated;
       if (fill) el('rect', { x: cx(c), y: cy(r), width: CELL, height: CELL, fill }, svg);
     }
@@ -990,16 +993,26 @@ function drawCageOutline(ci) {
   }, svg);
 }
 
-// 選んだマスと関係の深いマス(同じ行・列・ブロック・ケージ)
+// 選んだマスと同じ行・列(うす水色にするマス)
 function getRelatedCells() {
   const s = new Set();
   if (!selected) return s;
   const { r, c } = selected;
   for (let i = 0; i < N; i++) { s.add(`${r},${i}`); s.add(`${i},${c}`); }
-  const b = boxOf(r, c);
-  for (let rr = 0; rr < N; rr++) for (let cc = 0; cc < N; cc++) if (boxOf(rr, cc) === b) s.add(`${rr},${cc}`);
-  const ci = cellCage[r][c];
-  if (ci >= 0) for (const [cr, cc] of cages[ci].cells) s.add(`${cr},${cc}`);
+  return s;
+}
+
+// 選んだマスに数字が入っているとき、同じ数字が入っているほかのマス
+function getSameDigitCells() {
+  const s = new Set();
+  if (!selected) return s;
+  const v = userGrid[selected.r][selected.c];
+  if (!v) return s;
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (userGrid[r][c] === v && !(r === selected.r && c === selected.c)) s.add(`${r},${c}`);
+    }
+  }
   return s;
 }
 
@@ -1111,6 +1124,10 @@ requestPuzzle();
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   コードの仕組み(かんたんな説明)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【ハイライト】
+  マスを選ぶと、同じ行と列がうす水色になります。
+  数字が入っているマスを選ぶと、同じ数字が入っているほかのマスが黄色になります。
 
 【間違いの表示】
   入れた数字が正しい答えと違うと、その場で赤くなります。
