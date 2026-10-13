@@ -926,6 +926,8 @@ function renderAll() {
     }
   }
 
+  updateNumpad();
+
   // タップを受け取る透明な層
   for (let r = 0; r < N; r++) {
     for (let c = 0; c < N; c++) {
@@ -1046,6 +1048,7 @@ function inputNumber(n) {
     return;
   }
   if (userGrid[r][c] === n) return;
+  if (isDigitDone(n)) { showMessage(`${n} は9個すべて入っています`); return; }
 
   pushUndo();
   userGrid[r][c] = n;
@@ -1092,6 +1095,22 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') inputNumber(0);
 });
 
+// 正しい場所に9個入った数字は、数字パッドから(わくごと)消す。
+// 並びがずれないよう、場所はそのまま残して見えなくします。
+function countCorrect(n) {
+  let k = 0;
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    if (userGrid[r][c] === n && solution[r][c] === n) k++;
+  }
+  return k;
+}
+function isDigitDone(n) { return solution.length > 0 && countCorrect(n) >= N; }
+function updateNumpad() {
+  document.querySelectorAll('#numpad .num-key[data-n]').forEach(btn => {
+    btn.style.visibility = isDigitDone(Number(btn.dataset.n)) ? 'hidden' : 'visible';
+  });
+}
+
 // ─── 数字パッド ─────────────────────────────────────────
 function buildNumpad() {
   const pad = document.getElementById('numpad');
@@ -1100,6 +1119,7 @@ function buildNumpad() {
     const btn = document.createElement('button');
     btn.className = 'num-key';
     btn.textContent = n;
+    btn.dataset.n = n;
     btn.onclick = () => inputNumber(n);
     pad.appendChild(btn);
   }
