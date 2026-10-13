@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="mobile-web-app-capable" content="yes">
+<title>キラーナンプレ 9×9</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f3ee;
+    --surface: #ffffff;
+    --grid-line: #c8c4bc;
+    --grid-bold: #2c2a26;
+    --cell-selected: #b8ddf7;
+    --cell-related: #eef5fb;
+    --cage-label: #1a5fa8;
+    --cage-dash: #6b7a99;
+    --error-bg: #fde8e8;
+    --error-text: #c0392b;
+    --ink: #1c1a17;
+    --ink-muted: #6b6860;
+    --accent: #1a5fa8;
+    --accent-light: #deeeff;
+    --btn-bg: #2c2a26;
+    --btn-text: #f5f3ee;
+    --memo-color: #b04fb0;
+    --loading-bg: rgba(255,255,255,0.82);
+    --shadow: 0 2px 12px rgba(0,0,0,0.10);
+  }
+
+  html[data-theme="dark"] {
+    --bg: #0e0e12;
+    --surface: #1b1b21;
+    --grid-line: #34343d;
+    --grid-bold: #6a6a76;
+    --cell-selected: #1f5fd1;
+    --cell-related: #182437;
+    --cage-label: #8fb8ff;
+    --cage-dash: #7d869a;
+    --error-bg: #3a1f22;
+    --error-text: #ff6b6b;
+    --ink: #eceae4;
+    --ink-muted: #9b9890;
+    --accent: #4c8dff;
+    --accent-light: #16283f;
+    --btn-bg: #eceae4;
+    --btn-text: #14141a;
+    --memo-color: #c79bec;
+    --loading-bg: rgba(14,14,18,0.82);
+    --shadow: 0 2px 14px rgba(0,0,0,0.55);
+  }
+
+  html { touch-action: manipulation; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Helvetica Neue', 'Arial', 'Hiragino Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 1rem 3rem;
+    color: var(--ink);
+    touch-action: manipulation;
+  }
+
+  header {
+    width: 100%;
+    max-width: 522px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.2rem;
+  }
+
+  .title { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; color: var(--ink); white-space: nowrap; }
+  .title span { color: var(--accent); }
+
+  #status-bar { font-size: 13px; color: var(--ink-muted); white-space: nowrap; }
+
+  #mode-row, #top-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 1rem;
+    width: 100%;
+    max-width: 680px;
+  }
+
+  #top-row { max-width: 522px; }
+
+  #mode-row { max-width: 522px; margin-top: 1rem; }
+
+  .pill-btn {
+    padding: 6px 16px;
+    border-radius: 99px;
+    border: 1.5px solid var(--grid-line);
+    background: var(--surface);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.13s, border-color 0.13s;
+    color: var(--ink);
+    touch-action: manipulation;
+  }
+
+  .pill-btn.active { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); }
+
+  .spacer { flex: 1; }
+
+  .action-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1.5px solid var(--grid-line);
+    background: var(--surface);
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--ink);
+    transition: background 0.12s;
+    touch-action: manipulation;
+  }
+
+  .action-btn:active { background: var(--accent-light); }
+
+  .action-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .action-btn.primary:active { filter: brightness(0.9); }
+  .action-btn:disabled { opacity: 0.55; cursor: default; }
+
+  #grid-wrap {
+    position: relative;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    border-radius: 4px;
+    border: 2.5px solid var(--grid-bold);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    width: 100%;
+    max-width: 522px;
+    margin: 0 auto;
+  }
+
+  #grid-svg { display: block; width: 100%; height: auto; }
+
+  #loading {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: var(--loading-bg);
+    color: var(--ink);
+    font-size: 16px;
+    font-weight: 600;
+    z-index: 5;
+  }
+  #loading.show { display: flex; }
+
+  .cell-value {
+    font-size: 25px;
+    font-weight: 600;
+    dominant-baseline: central;
+    text-anchor: middle;
+    pointer-events: none;
+  }
+
+  .memo-num {
+    font-size: 11px;
+    fill: var(--memo-color);
+    dominant-baseline: central;
+    text-anchor: middle;
+    pointer-events: none;
+    font-weight: 800;
+  }
+
+  .cage-label {
+    font-size: 12px;
+    fill: var(--cage-label);
+    dominant-baseline: hanging;
+    text-anchor: start;
+    pointer-events: none;
+    font-weight: 600;
+  }
+
+  #numpad {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 6px;
+    margin-top: 1rem;
+    width: 100%;
+    max-width: 520px;
+  }
+
+  .num-key {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    border: 1.5px solid var(--grid-line);
+    background: var(--surface);
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.1s, transform 0.08s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+    touch-action: manipulation;
+  }
+
+  .num-key:active { transform: scale(0.94); background: var(--accent-light); border-color: var(--accent); }
+
+  .num-key.del { font-size: 14px; color: var(--error-text); }
+
+  #message {
+    min-height: 28px;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    margin-top: 0.8rem;
+    color: var(--accent);
+  }
+
+  #clear-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  #clear-modal.show { display: flex; }
+
+  #clear-box {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 2.5rem 3rem;
+    text-align: center;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.22);
+    max-width: 320px;
+    width: 90%;
+  }
+  #clear-box h2 { font-size: 28px; margin-bottom: 0.5rem; }
+  #clear-box p { color: var(--ink-muted); font-size: 14px; margin-bottom: 1.5rem; }
+
+  .diff-badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-weight: 600;
+    margin-left: 6px;
+    background: #f8d7da;
+    color: #842029;
+  }
+  html[data-theme="dark"] .diff-badge { background: #4a2328; color: #ffb3b9; }
+
+  @media (max-width: 540px) {
+    .title { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">キラー<span>ナンプレ</span></div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <div id="status-bar">#<span id="puzzle-num">-</span><span id="diff-badge" class="diff-badge">エキスパート</span></div>
+    <button id="theme-toggle" class="action-btn" onclick="toggleTheme()" title="表示切り替え(ダーク/ライト)">🌙</button>
+  </div>
+</header>
+
+<div id="top-row">
+  <button class="action-btn" id="btn-undo" onclick="undo()" title="ひとつ前の状態に戻します">↶ 元に戻す</button>
+  <button class="action-btn" onclick="resetPuzzle()">リセット</button>
+  <div class="spacer"></div>
+  <button class="action-btn primary" id="btn-next" onclick="nextPuzzle()">次の問題 →</button>
+</div>
+
+<div id="grid-wrap">
+  <svg id="grid-svg" viewBox="0 0 522 522" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div id="loading" class="show">問題をつくっています…</div>
+</div>
+
+<div id="mode-row">
+  <button class="pill-btn active" id="btn-input" onclick="setMode('input')">数字入力</button>
+  <button class="pill-btn" id="btn-memo" onclick="setMode('memo')">メモ</button>
+  <button class="action-btn" id="btn-memo-all" onclick="fillAllMemo()" title="選んでいるマスに入れられる数字を、メモとしてまとめて入れます">全部メモ</button>
+  <button class="action-btn" id="btn-check" onclick="checkAnswers()" title="今入力した数字が正しいか確認します">正誤</button>
+</div>
+
+<div id="numpad"></div>
+<div id="message"></div>
+
+<div id="clear-modal">
+  <div id="clear-box">
+    <h2>🎉 クリア！</h2>
+    <p id="clear-detail">素晴らしい！</p>
+    <button class="action-btn primary" style="width:100%;padding:12px;font-size:16px;" onclick="nextPuzzle()">次の問題 →</button>
+    <br><br>
+    <button class="action-btn" style="width:100%;padding:10px;" onclick="document.getElementById('clear-modal').classList.remove('show')">このまま見る</button>
+  </div>
+</div>
+
+<!-- 問題をつくるための部分(画面の裏側で動かすため、文字としてここに入れています) -->
+<script id="core-src" type="text/plain">
+// ===== キラーナンプレ 問題づくりの中心部分(ブラウザでもNodeでも動く) =====
+const KS = (function () {
+  const POP = new Uint8Array(1024);
+  for (let m = 1; m < 1024; m++) POP[m] = POP[m >> 1] + (m & 1);
+
+  // SUBS[k][s] = 「k個の違う数字(1〜9)で合計s」になる組み合わせ(ビット表現)の一覧
+  const SUBS = Array.from({ length: 10 }, () => Array.from({ length: 46 }, () => []));
+  for (let m = 1; m < 1024; m += 2) {
+    // ビットdは (1<<d)。dは1〜9なので m の最下位ビット(d=0)は使わない
+  }
+  for (let m = 0; m < 512; m++) {
+    // m の bit(d-1) が立っている = 数字dを使う
+    let k = 0, s = 0, mask = 0;
+    for (let d = 1; d <= 9; d++) if (m & (1 << (d - 1))) { k++; s += d; mask |= 1 << d; }
+    if (k > 0) SUBS[k][s].push(mask);
+  }
+
+  // マスの関係
+  const ROW = [], COL = [], BOX = [];
+  for (let i = 0; i < 81; i++) {
+    const r = (i / 9) | 0, c = i % 9;
+    ROW[i] = r; COL[i] = c; BOX[i] = ((r / 3) | 0) * 3 + ((c / 3) | 0);
+  }
+  const UNITS = [];
+  for (let r = 0; r < 9; r++) UNITS.push(Array.from({ length: 9 }, (_, c) => r * 9 + c));
+  for (let c = 0; c < 9; c++) UNITS.push(Array.from({ length: 9 }, (_, r) => r * 9 + c));
+  for (let b = 0; b < 9; b++) {
+    const br = ((b / 3) | 0) * 3, bc = (b % 3) * 3, u = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) u.push((br + r) * 9 + bc + c);
+    UNITS.push(u);
+  }
+  const PEERS = [];
+  for (let i = 0; i < 81; i++) {
+    const s = new Set();
+    for (let j = 0; j < 81; j++) if (j !== i && (ROW[j] === ROW[i] || COL[j] === COL[i] || BOX[j] === BOX[i])) s.add(j);
+    PEERS[i] = Array.from(s);
+  }
+
+  // 45のルール用:行・列・ブロックの「1〜3個の組み合わせ」
+  const WINDOWS = [];
+  (function () {
+    for (let type = 0; type < 3; type++) {
+      const base = type * 9;
+      for (let a = 0; a < 9; a++) {
+        WINDOWS.push({ cells: UNITS[base + a].slice(), n: 1 });
+        for (let b = a + 1; b < 9; b++) {
+          WINDOWS.push({ cells: UNITS[base + a].concat(UNITS[base + b]), n: 2 });
+          for (let c = b + 1; c < 9; c++)
+            WINDOWS.push({ cells: UNITS[base + a].concat(UNITS[base + b], UNITS[base + c]), n: 3 });
+        }
+      }
+    }
+    for (const w of WINDOWS) { w.inW = new Uint8Array(81); for (const x of w.cells) w.inW[x] = 1; }
+  })();
+
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      const t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  // ---- ランダムな完成盤面 ----
+  function genSolution() {
+    const g = new Uint8Array(81);
+    const rowM = new Uint16Array(9), colM = new Uint16Array(9), boxM = new Uint16Array(9);
+    function rec(i) {
+      if (i === 81) return true;
+      const r = ROW[i], c = COL[i], b = BOX[i];
+      const used = rowM[r] | colM[c] | boxM[b];
+      const ds = [];
+      for (let d = 1; d <= 9; d++) if (!(used & (1 << d))) ds.push(d);
+      shuffle(ds);
+      for (const d of ds) {
+        g[i] = d; rowM[r] |= 1 << d; colM[c] |= 1 << d; boxM[b] |= 1 << d;
+        if (rec(i + 1)) return true;
+        g[i] = 0; rowM[r] &= ~(1 << d); colM[c] &= ~(1 << d); boxM[b] &= ~(1 << d);
+      }
+      return false;
+    }
+    rec(0);
+    return g;
+  }
+
+  // cageId(81) と 解答 から ケージ一覧 {cells,sum} をつくる
+  function buildCages(cageId, sol) {
+    const map = new Map();
+    for (let i = 0; i < 81; i++) {
+      let c = map.get(cageId[i]);
+      if (!c) { c = { cells: [], sum: 0 }; map.set(cageId[i], c); }
+      c.cells.push(i); c.sum += sol[i];
+    }
+    return Array.from(map.values());
+  }
+
+  // ---- 論理で解く(推測しない) ----
+  // level: 0=ケージの組み合わせ+単独候補+唯一の置き場所 / 1=さらに「45のルール」
+  // 失敗(矛盾)なら null、それ以外は {val,cand,solved}
+  function propagate(st, cages, cageOf, level) {
+    const val = st.val, cand = st.cand;
+    function assign(i, d) {
+      val[i] = d; cand[i] = 1 << d;
+      const bit = ~(1 << d);
+      const P = PEERS[i];
+      for (let q = 0; q < 20; q++) cand[P[q]] &= bit;
+    }
+    let changed = true;
+    while (changed) {
+      changed = false;
+      // A) ケージの組み合わせ
+      for (let ci = 0; ci < cages.length; ci++) {
+        const cg = cages[ci], cells = cg.cells;
+        let solvedSum = 0, used = 0, k = 0;
+        for (let q = 0; q < cells.length; q++) {
+          const v = val[cells[q]];
+          if (v) { solvedSum += v; used |= 1 << v; } else k++;
+        }
+        const rem = cg.sum - solvedSum;
+        // 同じケージの中に同じ数字が2つあったら矛盾
+        if (POP[used] !== cells.length - k) return null;
+        if (k === 0) { if (rem !== 0) return null; continue; }
+        if (rem < 0 || rem > 45) return null;
+        const list = SUBS[k][rem];
+        let allowed = 0;
+        for (let q = 0; q < list.length; q++) if (!(list[q] & used)) allowed |= list[q];
+        if (!allowed) return null;
+        for (let q = 0; q < cells.length; q++) {
+          const x = cells[q];
+          if (!val[x]) {
+            const nc = cand[x] & allowed;
+            if (nc !== cand[x]) { cand[x] = nc; changed = true; }
+          }
+        }
+      }
+      // B) 候補がひとつだけのマス
+      for (let i = 0; i < 81; i++) {
+        if (!val[i]) {
+          const m = cand[i];
+          if (m === 0) return null;
+          if ((m & (m - 1)) === 0) {
+            let d = 1; while (!(m & (1 << d))) d++;
+            assign(i, d); changed = true;
+          }
+        }
+      }
+      // C) 行・列・ブロックで置ける場所がひとつだけの数字
+      for (let u = 0; u < 27; u++) {
+        const cells = UNITS[u];
+        let placed = 0;
+        for (let q = 0; q < 9; q++) if (val[cells[q]]) placed |= 1 << val[cells[q]];
+        for (let d = 1; d <= 9; d++) {
+          if (placed & (1 << d)) continue;
+          let cnt = 0, at = -1;
+          for (let q = 0; q < 9; q++) {
+            const x = cells[q];
+            if (!val[x] && (cand[x] & (1 << d))) { cnt++; at = x; }
+          }
+          if (cnt === 0) return null;
+          if (cnt === 1) { assign(at, d); changed = true; placed |= 1 << d; }
+        }
+      }
+      if (changed) continue;
+      // D) 45のルール(まだ解けていないマスだけで考える)
+      if (level >= 1) {
+        // 各ケージの「残りの合計」と「未確定マス」
+        const remSum = new Int16Array(cages.length);
+        const unsolvedCnt = new Int16Array(cages.length);
+        for (let ci = 0; ci < cages.length; ci++) {
+          const cells = cages[ci].cells; let s = cages[ci].sum, n = 0;
+          for (let q = 0; q < cells.length; q++) { const v = val[cells[q]]; if (v) s -= v; else n++; }
+          remSum[ci] = s; unsolvedCnt[ci] = n;
+        }
+        for (let wi = 0; wi < WINDOWS.length && !changed; wi++) {
+          const w = WINDOWS[wi], inW = w.inW;
+          let solvedInW = 0, unsolvedInW = 0;
+          for (let q = 0; q < w.cells.length; q++) {
+            const v = val[w.cells[q]]; if (v) solvedInW += v; else unsolvedInW++;
+          }
+          if (unsolvedInW === 0) continue;
+          const sumT = 45 * w.n - solvedInW;
+          // 完全に枠の中に入っているケージ F と、枠にかかるケージ G
+          let sumF = 0, cntF = 0, sumG = 0;
+          let outCell = -1, outCnt = 0;
+          const coveredInW = new Set();
+          for (let ci = 0; ci < cages.length; ci++) {
+            if (!unsolvedCnt[ci]) continue;
+            const cells = cages[ci].cells;
+            let inside = 0, outside = 0, firstOut = -1;
+            for (let q = 0; q < cells.length; q++) {
+              const x = cells[q]; if (val[x]) continue;
+              if (inW[x]) inside++; else { outside++; firstOut = x; }
+            }
+            if (inside === 0) continue;
+            sumG += remSum[ci];
+            if (outside === 0) {
+              sumF += remSum[ci]; cntF += inside;
+              for (let q = 0; q < cells.length; q++) if (!val[cells[q]]) coveredInW.add(cells[q]);
+            } else {
+              outCnt += outside;
+              for (let q = 0; q < cells.length; q++) { const x = cells[q]; if (!val[x] && !inW[x]) outCell = x; }
+            }
+          }
+          // 内側がひとつ余る場合
+          if (unsolvedInW - cntF === 1) {
+            const v = sumT - sumF;
+            let at = -1;
+            for (let q = 0; q < w.cells.length; q++) { const x = w.cells[q]; if (!val[x] && !coveredInW.has(x)) at = x; }
+            if (at >= 0) {
+              if (v < 1 || v > 9 || !(cand[at] & (1 << v))) return null;
+              assign(at, v); changed = true; continue;
+            }
+          }
+          // 外側がひとつはみ出る場合(はみ出るマスが全部でひとつだけ)
+          if (outCnt === 1 && outCell >= 0) {
+            // 外側の合計 = 枠にかかるケージの合計 - 枠の中の合計
+            const v = sumG - sumT;
+            if (v < 1 || v > 9 || !(cand[outCell] & (1 << v))) return null;
+            assign(outCell, v); changed = true; continue;
+          }
+        }
+      }
+    }
+    return st;
+  }
+
+  function newState() {
+    const cand = new Uint16Array(81).fill(0x3FE);
+    return { val: new Uint8Array(81), cand };
+  }
+  function cloneState(s) { return { val: s.val.slice(), cand: s.cand.slice() }; }
+
+  function makeCageOf(cages) {
+    const cageOf = new Int16Array(81);
+    cages.forEach((c, i) => c.cells.forEach(x => (cageOf[x] = i)));
+    return cageOf;
+  }
+
+  function logicSolve(cages, level) {
+    const cageOf = makeCageOf(cages);
+    const st = propagate(newState(), cages, cageOf, level);
+    if (!st) return false;
+    for (let i = 0; i < 81; i++) if (!st.val[i]) return false;
+    return true;
+  }
+
+  // ---- 解の数を数える(2つ見つかったら打ち切り) ----
+  function countSolutions(cages, limit) {
+    const cageOf = makeCageOf(cages);
+    let count = 0, firstSol = null;
+    function rec(st) {
+      const s = propagate(st, cages, cageOf, 0);
+      if (!s) return;
+      let best = -1, bestN = 99;
+      for (let i = 0; i < 81; i++) {
+        if (!s.val[i]) {
+          const n = POP[s.cand[i]];
+          if (n < bestN) { bestN = n; best = i; if (n === 2) break; }
+        }
+      }
+      if (best < 0) { count++; if (!firstSol) firstSol = s.val.slice(); return; }
+      const m = s.cand[best];
+      for (let d = 1; d <= 9 && count < limit; d++) {
+        if (m & (1 << d)) {
+          const t = cloneState(s);
+          t.val[best] = d; t.cand[best] = 1 << d;
+          const bit = ~(1 << d);
+          for (const p of PEERS[best]) t.cand[p] &= bit;
+          rec(t);
+        }
+      }
+    }
+    rec(newState());
+    return { count, solution: firstSol };
+  }
+
+  // ---- エキスパート問題づくり ----
+  // 全部ひとマスずつの状態から、論理だけで解ける範囲でできるだけケージをくっつける
+  function generate(opts) {
+    opts = opts || {};
+    const maxSize = opts.maxSize || 4;
+    const level = opts.level == null ? 1 : opts.level;
+    const sol = genSolution();
+    const cageId = new Int16Array(81);
+    for (let i = 0; i < 81; i++) cageId[i] = i;
+    const size = new Int16Array(81).fill(1);   // ケージidごとの大きさ
+    const digits = new Uint16Array(81);        // ケージidごとの使用数字
+    for (let i = 0; i < 81; i++) digits[i] = 1 << sol[i];
+    // マスの隣り合わせ
+    const edges = [];
+    for (let i = 0; i < 81; i++) {
+      if (COL[i] < 8) edges.push([i, i + 1]);
+      if (ROW[i] < 8) edges.push([i, i + 9]);
+    }
+    let progress = true, trials = 0;
+    while (progress) {
+      progress = false;
+      shuffle(edges);
+      for (const [a, b] of edges) {
+        const ca = cageId[a], cb = cageId[b];
+        if (ca === cb) continue;
+        if (size[ca] + size[cb] > maxSize) continue;
+        if (digits[ca] & digits[cb]) continue;
+        // くっつけた状態を試す
+        const trial = cageId.slice();
+        for (let i = 0; i < 81; i++) if (trial[i] === cb) trial[i] = ca;
+        const cages = buildCages(trial, sol);
+        trials++;
+        if (logicSolve(cages, level)) {
+          for (let i = 0; i < 81; i++) cageId[i] = trial[i];
+          size[ca] += size[cb]; digits[ca] |= digits[cb]; size[cb] = 0; digits[cb] = 0;
+          progress = true;
+        }
+      }
+    }
+    // ---- 仕上げ:マスを隣のケージへ移して、1マスだけのケージをへらす ----
+    const iters = opts.iters == null ? 1500 : opts.iters;
+    const cellDig = new Uint16Array(81);
+    for (let i = 0; i < 81; i++) cellDig[i] = 1 << sol[i];
+    const NB = [];
+    for (let i = 0; i < 81; i++) {
+      const a = [];
+      if (COL[i] > 0) a.push(i - 1);
+      if (COL[i] < 8) a.push(i + 1);
+      if (ROW[i] > 0) a.push(i - 9);
+      if (ROW[i] < 8) a.push(i + 9);
+      NB[i] = a;
+    }
+    function score(ids) {
+      const cnt = new Map();
+      for (let i = 0; i < 81; i++) cnt.set(ids[i], (cnt.get(ids[i]) || 0) + 1);
+      let singles = 0;
+      cnt.forEach(v => { if (v === 1) singles++; });
+      return singles * 30 + cnt.size;
+    }
+    function connectedWithout(ids, id, skip) {
+      const cells = [];
+      for (let i = 0; i < 81; i++) if (ids[i] === id && i !== skip) cells.push(i);
+      if (cells.length <= 1) return true;
+      const seen = new Set([cells[0]]), stack = [cells[0]];
+      while (stack.length) {
+        const x = stack.pop();
+        for (const y of NB[x]) if (y !== skip && ids[y] === id && !seen.has(y)) { seen.add(y); stack.push(y); }
+      }
+      return seen.size === cells.length;
+    }
+    let cur = score(cageId);
+    for (let it = 0; it < iters; it++) {
+      const x = (Math.random() * 81) | 0;
+      const nb = NB[x];
+      const y = nb[(Math.random() * nb.length) | 0];
+      const A = cageId[x], B = cageId[y];
+      if (A === B) continue;
+      if (size[B] + 1 > maxSize) continue;
+      if (digits[B] & cellDig[x]) continue;
+      if (size[A] > 1 && !connectedWithout(cageId, A, x)) continue;
+      const trial = cageId.slice();
+      trial[x] = B;
+      const sc = score(trial);
+      if (sc > cur) continue;
+      const cages2 = buildCages(trial, sol);
+      trials++;
+      if (!logicSolve(cages2, level)) continue;
+      cageId[x] = B;
+      size[A]--; size[B]++;
+      digits[A] &= ~cellDig[x]; digits[B] |= cellDig[x];
+      cur = sc;
+    }
+    const cages = buildCages(cageId, sol);
+    return { sol, cages, trials };
+  }
+
+  // ---- 画面から呼ぶ入口:エキスパート問題を1問つくる ----
+  // 1マスだけのケージ(最初から数字がわかってしまう場所)が少ないものを選ぶ
+  function generateExpert() {
+    let best = null;
+    for (let t = 0; t < 40; t++) {
+      const p = generate({ maxSize: 5, level: 1, iters: 2500 });
+      // 念のため、別の方法でも「答えが1通りだけ」を確かめる
+      const chk = countSolutions(p.cages, 2);
+      if (chk.count !== 1) continue;
+      const singles = p.cages.filter(c => c.cells.length === 1).length;
+      if (!best || singles < best.singles || (singles === best.singles && p.cages.length < best.cages.length)) {
+        best = { sol: Array.from(p.sol), cages: p.cages.map(c => ({ cells: c.cells.slice(), sum: c.sum })), singles };
+      }
+      if (singles <= 1) break;
+    }
+    return best;
+  }
+
+  return { generate, generateExpert, countSolutions, logicSolve, genSolution, buildCages, POP };
+})();
+if (typeof module !== 'undefined') module.exports = KS;
+
+</script>
+
+<script>
+'use strict';
+
+// ─── 定数 ───────────────────────────────────────────────
+const N = 9;
+const CELL = 58;           // 1マスの大きさ
+const SVG_SIZE = N * CELL;
+const DASH_INSET = 4;      // ケージの点線を、枠から内側へずらす量
+
+// ─── 状態 ───────────────────────────────────────────────
+let solution = [];    // [r][c] = 1..9
+let cages = [];       // [{cells:[[r,c],...], sum}]
+let cellCage = [];    // [r][c] = ケージの番号
+let userGrid = [];    // [r][c] = 0 または 1..9
+let memoGrid = [];    // [r][c] = メモの数字の集まり
+let mode = 'input';
+let selected = null;  // {r, c}
+let puzzleCount = 0;
+let startTime = 0;
+let theme = 'light';
+let undoStack = [];
+let checkedWrongCells = null;
+
+const svg = document.getElementById('grid-svg');
+
+function el(tag, attrs = {}, parent = null) {
+  const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function cx(c) { return c * CELL; }
+function cy(r) { return r * CELL; }
+
+function cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+// ─── テーマ(ダーク/ライト) ─────────────────────────────
+// 保存の名前はKenKenと同じにしてあります(同じ場所に置けば、見た目の設定が共通になります)
+const THEME_KEY = 'kenken-theme';
+
+function updateThemeButton() {
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+function applyTheme(t) {
+  theme = t;
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem(THEME_KEY, t); } catch (e) { /* 保存できなくても続行 */ }
+  updateThemeButton();
+  renderAll();
+}
+function toggleTheme() { applyTheme(theme === 'dark' ? 'light' : 'dark'); }
+function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* 読めなくても続行 */ }
+  if (saved === 'light' || saved === 'dark') theme = saved;
+  else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  updateThemeButton();
+}
+
+// ─── 元に戻す ───────────────────────────────────────────
+function snapshotState() {
+  return {
+    userGrid: userGrid.map(row => row.slice()),
+    memoGrid: memoGrid.map(row => row.map(s => new Set(s))),
+  };
+}
+function pushUndo() {
+  undoStack.push(snapshotState());
+  if (undoStack.length > 200) undoStack.shift();
+  checkedWrongCells = null;
+}
+function undo() {
+  if (undoStack.length === 0) { showMessage('これ以上は戻せません'); return; }
+  const prev = undoStack.pop();
+  userGrid = prev.userGrid;
+  memoGrid = prev.memoGrid;
+  checkedWrongCells = null;
+  renderAll();
+  showMessage('ひとつ前に戻しました');
+}
+
+// ─── 正誤チェック ───────────────────────────────────────
+function checkAnswers() {
+  if (!solution.length) return;
+  let anyFilled = false;
+  const wrong = new Set();
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (userGrid[r][c] > 0) {
+        anyFilled = true;
+        if (userGrid[r][c] !== solution[r][c]) wrong.add(`${r},${c}`);
+      }
+    }
+  }
+  if (!anyFilled) { showMessage('まだ数字が入力されていません'); return; }
+  checkedWrongCells = wrong;
+  renderAll();
+  showMessage(wrong.size === 0 ? '今のところ間違いはありません' : `間違っている数字が ${wrong.size} マスあります`);
+}
+
+// ─── 問題づくり(画面の裏側で動かす) ───────────────────
+const CORE_SRC = document.getElementById('core-src').textContent;
+let worker = null;
+let workerFailed = false;
+let mainKS = null;
+let pending = false;        // いま問題をつくっている最中か
+let readyPuzzle = null;     // 先につくっておいた次の問題
+let waiting = false;        // 画面が問題の完成を待っているか
+
+function ensureWorker() {
+  if (worker) return worker;
+  const code = CORE_SRC + '\nonmessage = function () { postMessage(KS.generateExpert()); };';
+  const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+  worker = new Worker(url);
+  worker.onmessage = e => onPuzzleMade(e.data);
+  worker.onerror = () => {
+    // 裏側で動かせない場合は、画面の中でつくる方法に切り替える
+    workerFailed = true;
+    worker = null;
+    pending = false;
+    requestPuzzle();
+  };
+  return worker;
+}
+
+function requestPuzzle() {
+  if (pending || readyPuzzle) return;
+  pending = true;
+  if (!workerFailed) {
+    try { ensureWorker().postMessage('go'); return; }
+    catch (e) { workerFailed = true; worker = null; }
+  }
+  setTimeout(() => {
+    try {
+      if (!mainKS) mainKS = new Function(CORE_SRC + '\nreturn KS;')();
+      onPuzzleMade(mainKS.generateExpert());
+    } catch (e) {
+      pending = false;
+      showLoading(false);
+      showMessage('問題をつくれませんでした。ページを読み込み直してください');
+    }
+  }, 50);
+}
+
+function onPuzzleMade(p) {
+  pending = false;
+  if (!p) { requestPuzzle(); return; }
+  if (waiting) {
+    waiting = false;
+    showLoading(false);
+    startPuzzle(p);
+    requestPuzzle();          // 次の問題を先につくっておく
+  } else {
+    readyPuzzle = p;
+  }
+}
+
+function showLoading(on) {
+  document.getElementById('loading').classList.toggle('show', on);
+  document.getElementById('btn-next').disabled = on;
+}
+
+// ─── ゲームの開始・リセット・次の問題 ───────────────────
+function startPuzzle(p) {
+  puzzleCount++;
+  solution = Array.from({ length: N }, (_, r) => Array.from({ length: N }, (_, c) => p.sol[r * N + c]));
+  cages = p.cages.map(cg => ({
+    cells: cg.cells.map(i => [Math.floor(i / N), i % N]),
+    sum: cg.sum,
+  }));
+  cellCage = Array.from({ length: N }, () => Array(N).fill(-1));
+  cages.forEach((cg, ci) => cg.cells.forEach(([r, c]) => { cellCage[r][c] = ci; }));
+  clearProgress();
+  startTime = Date.now();
+  document.getElementById('puzzle-num').textContent = puzzleCount;
+  renderAll();
+}
+
+function clearProgress() {
+  userGrid = Array.from({ length: N }, () => Array(N).fill(0));
+  memoGrid = Array.from({ length: N }, () => Array.from({ length: N }, () => new Set()));
+  selected = null;
+  undoStack = [];
+  checkedWrongCells = null;
+}
+
+function resetPuzzle() {
+  if (!solution.length) return;
+  clearProgress();
+  renderAll();
+  showMessage('リセットしました');
+}
+
+function nextPuzzle() {
+  document.getElementById('clear-modal').classList.remove('show');
+  if (readyPuzzle) {
+    const p = readyPuzzle;
+    readyPuzzle = null;
+    startPuzzle(p);
+    requestPuzzle();
+  } else {
+    waiting = true;
+    showLoading(true);
+    requestPuzzle();
+  }
+}
+
+// ─── 盤面の描画 ─────────────────────────────────────────
+function boxOf(r, c) { return Math.floor(r / 3) * 3 + Math.floor(c / 3); }
+
+function renderAll() {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  const colSurface = cssVar('--surface', '#ffffff');
+  const colSelected = cssVar('--cell-selected', '#b8ddf7');
+  const colErrorBg = cssVar('--error-bg', '#fde8e8');
+  const colRelated = cssVar('--cell-related', '#eef5fb');
+  const colGrid = cssVar('--grid-line', '#cccccc');
+  const colBold = cssVar('--grid-bold', '#2c2a26');
+  const colInk = cssVar('--ink', '#1c1a17');
+  const colErrorText = cssVar('--error-text', '#c0392b');
+
+  el('rect', { x: 0, y: 0, width: SVG_SIZE, height: SVG_SIZE, fill: colSurface }, svg);
+
+  const errors = computeErrors();
+  if (checkedWrongCells) for (const key of checkedWrongCells) errors.add(key);
+  const related = getRelatedCells();
+
+  // マスの背景(選んだマス・同じ行や列やブロック・間違い)
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const isSelected = selected && selected.r === r && selected.c === c;
+      const isError = errors.has(`${r},${c}`) && userGrid[r][c] > 0;
+      let fill = null;
+      if (isSelected) fill = colSelected;
+      else if (isError) fill = colErrorBg;
+      else if (related.has(`${r},${c}`)) fill = colRelated;
+      if (fill) el('rect', { x: cx(c), y: cy(r), width: CELL, height: CELL, fill }, svg);
+    }
+  }
+
+  // 細い線(マスの区切り)
+  for (let i = 1; i < N; i++) {
+    if (i % 3 === 0) continue;
+    el('line', { x1: cx(i), y1: 0, x2: cx(i), y2: SVG_SIZE, stroke: colGrid, 'stroke-width': 0.7 }, svg);
+    el('line', { x1: 0, y1: cy(i), x2: SVG_SIZE, y2: cy(i), stroke: colGrid, 'stroke-width': 0.7 }, svg);
+  }
+  // 太い線(3×3のブロックの区切り)
+  for (let i = 3; i < N; i += 3) {
+    el('line', { x1: cx(i), y1: 0, x2: cx(i), y2: SVG_SIZE, stroke: colBold, 'stroke-width': 2.2 }, svg);
+    el('line', { x1: 0, y1: cy(i), x2: SVG_SIZE, y2: cy(i), stroke: colBold, 'stroke-width': 2.2 }, svg);
+  }
+
+  // ケージの点線
+  for (let ci = 0; ci < cages.length; ci++) drawCageOutline(ci);
+
+  // ケージの合計(いちばん左上のマスに表示)
+  for (let ci = 0; ci < cages.length; ci++) {
+    let minR = N, minC = N;
+    for (const [r, c] of cages[ci].cells) {
+      if (r < minR || (r === minR && c < minC)) { minR = r; minC = c; }
+    }
+    el('text', { x: cx(minC) + 6, y: cy(minR) + 6, class: 'cage-label' }, svg).textContent = cages[ci].sum;
+  }
+
+  // 数字とメモ
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const v = userGrid[r][c];
+      if (v > 0) {
+        const isError = errors.has(`${r},${c}`);
+        el('text', {
+          x: cx(c) + CELL / 2, y: cy(r) + CELL / 2 + 3,
+          class: 'cell-value',
+          fill: isError ? colErrorText : colInk,
+        }, svg).textContent = v;
+      } else {
+        const memo = memoGrid[r][c];
+        if (memo.size > 0) {
+          const memoTop = 16;                       // 合計の数字と重ならないように上を空ける
+          const rowH = (CELL - memoTop - 2) / 3;
+          const colW = CELL / 3;
+          for (let n = 1; n <= 9; n++) {
+            if (!memo.has(n)) continue;
+            const mr = Math.floor((n - 1) / 3), mc = (n - 1) % 3;
+            el('text', {
+              x: cx(c) + mc * colW + colW / 2,
+              y: cy(r) + memoTop + mr * rowH + rowH / 2,
+              class: 'memo-num',
+            }, svg).textContent = n;
+          }
+        }
+      }
+    }
+  }
+
+  // タップを受け取る透明な層
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const rect = el('rect', { x: cx(c), y: cy(r), width: CELL, height: CELL, fill: 'transparent', cursor: 'pointer' }, svg);
+      rect.addEventListener('click', () => selectCell(r, c));
+    }
+  }
+}
+
+// ケージの輪郭を、内側へ少しずらした点線で描く
+function drawCageOutline(ci) {
+  const cage = cages[ci];
+  const set = new Set(cage.cells.map(([r, c]) => r * N + c));
+  const has = (r, c) => r >= 0 && r < N && c >= 0 && c < N && set.has(r * N + c);
+  const d = DASH_INSET;
+  const hs = [], vs = [];   // 横線 {y,a,b} / 縦線 {x,a,b}
+
+  for (const [r, c] of cage.cells) {
+    const x0 = cx(c), x1 = x0 + CELL, y0 = cy(r), y1 = y0 + CELL;
+    // 線の端は、まわりのマスの入り方で「内側へ引く」「まっすぐ続ける」「外へ少し出す」を決める
+    if (!has(r - 1, c)) {   // 上の辺
+      const a = x0 + (has(r, c - 1) ? (has(r - 1, c - 1) ? -d : 0) : d);
+      const b = x1 + (has(r, c + 1) ? (has(r - 1, c + 1) ? d : 0) : -d);
+      hs.push({ y: y0 + d, a, b });
+    }
+    if (!has(r + 1, c)) {   // 下の辺
+      const a = x0 + (has(r, c - 1) ? (has(r + 1, c - 1) ? -d : 0) : d);
+      const b = x1 + (has(r, c + 1) ? (has(r + 1, c + 1) ? d : 0) : -d);
+      hs.push({ y: y1 - d, a, b });
+    }
+    if (!has(r, c - 1)) {   // 左の辺
+      const a = y0 + (has(r - 1, c) ? (has(r - 1, c - 1) ? -d : 0) : d);
+      const b = y1 + (has(r + 1, c) ? (has(r + 1, c - 1) ? d : 0) : -d);
+      vs.push({ x: x0 + d, a, b });
+    }
+    if (!has(r, c + 1)) {   // 右の辺
+      const a = y0 + (has(r - 1, c) ? (has(r - 1, c + 1) ? -d : 0) : d);
+      const b = y1 + (has(r + 1, c) ? (has(r + 1, c + 1) ? d : 0) : -d);
+      vs.push({ x: x1 - d, a, b });
+    }
+  }
+
+  // 同じ線の上でつながっているものは1本にまとめる
+  function merge(list, key) {
+    list.sort((p, q) => (p[key] - q[key]) || (p.a - q.a));
+    const out = [];
+    for (const s of list) {
+      const last = out[out.length - 1];
+      if (last && last[key] === s[key] && s.a <= last.b + 0.5) last.b = Math.max(last.b, s.b);
+      else out.push({ ...s });
+    }
+    return out;
+  }
+
+  let path = '';
+  for (const s of merge(hs, 'y')) path += `M${s.a} ${s.y}L${s.b} ${s.y}`;
+  for (const s of merge(vs, 'x')) path += `M${s.x} ${s.a}L${s.x} ${s.b}`;
+  el('path', {
+    d: path, fill: 'none',
+    stroke: cssVar('--cage-dash', '#6b7a99'),
+    'stroke-width': 1.3,
+    'stroke-dasharray': '4 3',
+    'stroke-linecap': 'butt',
+    'pointer-events': 'none',
+  }, svg);
+}
+
+// 選んだマスと関係の深いマス(同じ行・列・ブロック・ケージ)
+function getRelatedCells() {
+  const s = new Set();
+  if (!selected) return s;
+  const { r, c } = selected;
+  for (let i = 0; i < N; i++) { s.add(`${r},${i}`); s.add(`${i},${c}`); }
+  const b = boxOf(r, c);
+  for (let rr = 0; rr < N; rr++) for (let cc = 0; cc < N; cc++) if (boxOf(rr, cc) === b) s.add(`${rr},${cc}`);
+  const ci = cellCage[r][c];
+  if (ci >= 0) for (const [cr, cc] of cages[ci].cells) s.add(`${cr},${cc}`);
+  return s;
+}
+
+// ─── ルール違反の判定 ───────────────────────────────────
+function computeErrors() {
+  const errors = new Set();
+  if (!cages.length) return errors;
+
+  function markDuplicates(list) {
+    const seen = {};
+    for (const [r, c] of list) {
+      const v = userGrid[r][c];
+      if (!v) continue;
+      if (seen[v]) { errors.add(`${r},${c}`); errors.add(seen[v]); }
+      else seen[v] = `${r},${c}`;
+    }
+  }
+
+  for (let i = 0; i < N; i++) {
+    markDuplicates(Array.from({ length: N }, (_, k) => [i, k]));   // 行
+    markDuplicates(Array.from({ length: N }, (_, k) => [k, i]));   // 列
+    const br = Math.floor(i / 3) * 3, bc = (i % 3) * 3;            // ブロック
+    markDuplicates(Array.from({ length: N }, (_, k) => [br + Math.floor(k / 3), bc + (k % 3)]));
+  }
+
+  for (const cage of cages) {
+    markDuplicates(cage.cells);
+    const vals = cage.cells.map(([r, c]) => userGrid[r][c]);
+    if (vals.every(v => v > 0) && vals.reduce((a, b) => a + b, 0) !== cage.sum) {
+      for (const [r, c] of cage.cells) errors.add(`${r},${c}`);
+    }
+  }
+  return errors;
+}
+
+// ─── 操作 ───────────────────────────────────────────────
+function selectCell(r, c) {
+  if (!cages.length) return;
+  selected = (selected && selected.r === r && selected.c === c) ? null : { r, c };
+  renderAll();
+}
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('btn-input').classList.toggle('active', m === 'input');
+  document.getElementById('btn-memo').classList.toggle('active', m === 'memo');
+}
+
+// そのマスに入れられない数字(同じ行・列・ブロック・ケージにすでに入っている数字)
+function getUsedNumbers(r, c) {
+  const used = new Set();
+  for (let i = 0; i < N; i++) {
+    if (userGrid[r][i] > 0) used.add(userGrid[r][i]);
+    if (userGrid[i][c] > 0) used.add(userGrid[i][c]);
+  }
+  const b = boxOf(r, c);
+  for (let rr = 0; rr < N; rr++) for (let cc = 0; cc < N; cc++)
+    if (boxOf(rr, cc) === b && userGrid[rr][cc] > 0) used.add(userGrid[rr][cc]);
+  const ci = cellCage[r][c];
+  if (ci >= 0) for (const [cr, cc] of cages[ci].cells) if (userGrid[cr][cc] > 0) used.add(userGrid[cr][cc]);
+  return used;
+}
+
+function inputNumber(n) {
+  if (!cages.length) return;
+  if (!selected) { showMessage('まず入力したいマスを選んでください'); return; }
+  const { r, c } = selected;
+
+  if (n === 0) {   // 消す:数字があれば数字を、なければメモを消す
+    if (userGrid[r][c] > 0) { pushUndo(); userGrid[r][c] = 0; }
+    else if (memoGrid[r][c].size > 0) { pushUndo(); memoGrid[r][c].clear(); }
+    renderAll();
+    return;
+  }
+
+  if (mode === 'memo') {
+    if (userGrid[r][c] > 0) { showMessage('確定済みのマスにはメモを入れられません'); return; }
+    if (getUsedNumbers(r, c).has(n)) {
+      showMessage(`同じ行・列・ブロック・ケージに ${n} が入っているため、メモできません`);
+      return;
+    }
+    pushUndo();
+    if (memoGrid[r][c].has(n)) memoGrid[r][c].delete(n);
+    else memoGrid[r][c].add(n);
+  } else {
+    pushUndo();
+    userGrid[r][c] = n;
+    memoGrid[r][c].clear();
+    // 関係するマスのメモから、同じ数字を自動で消す
+    for (let i = 0; i < N; i++) { memoGrid[r][i].delete(n); memoGrid[i][c].delete(n); }
+    const b = boxOf(r, c);
+    for (let rr = 0; rr < N; rr++) for (let cc = 0; cc < N; cc++) if (boxOf(rr, cc) === b) memoGrid[rr][cc].delete(n);
+    const ci = cellCage[r][c];
+    if (ci >= 0) for (const [cr, cc] of cages[ci].cells) memoGrid[cr][cc].delete(n);
+  }
+
+  renderAll();
+  checkComplete();
+}
+
+function fillAllMemo() {
+  if (!cages.length) return;
+  if (!selected) { showMessage('まず入力したいマスを選んでください'); return; }
+  const { r, c } = selected;
+  if (userGrid[r][c] > 0) { showMessage('確定済みのマスにはメモを入れられません'); return; }
+  pushUndo();
+  const used = getUsedNumbers(r, c);
+  const candidates = new Set();
+  for (let n = 1; n <= 9; n++) if (!used.has(n)) candidates.add(n);
+  memoGrid[r][c] = candidates;
+  renderAll();
+}
+
+function checkComplete() {
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (userGrid[r][c] === 0) return;
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    if (userGrid[r][c] !== solution[r][c]) {
+      showMessage('どこか間違いがあります。赤いマスを確認してね。');
+      return;
+    }
+  }
+  const elapsed = Math.round((Date.now() - startTime) / 1000);
+  const mins = Math.floor(elapsed / 60), secs = elapsed % 60;
+  document.getElementById('clear-detail').textContent = `クリアタイム: ${mins > 0 ? mins + '分' : ''}${secs}秒`;
+  setTimeout(() => document.getElementById('clear-modal').classList.add('show'), 300);
+}
+
+function showMessage(msg) {
+  const box = document.getElementById('message');
+  box.textContent = msg;
+  if (msg) setTimeout(() => { if (box.textContent === msg) box.textContent = ''; }, 3000);
+}
+
+// ─── キーボード(パソコンで遊ぶとき用) ─────────────────
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); undo(); return; }
+  if (!selected) return;
+  const { r, c } = selected;
+  const keyMap = {
+    ArrowUp: { r: r - 1, c }, ArrowDown: { r: r + 1, c },
+    ArrowLeft: { r, c: c - 1 }, ArrowRight: { r, c: c + 1 },
+  };
+  if (keyMap[e.key]) {
+    const nxt = keyMap[e.key];
+    if (nxt.r >= 0 && nxt.r < N && nxt.c >= 0 && nxt.c < N) { selected = nxt; renderAll(); }
+    e.preventDefault();
+    return;
+  }
+  if (e.key >= '1' && e.key <= '9') inputNumber(parseInt(e.key, 10));
+  if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') inputNumber(0);
+  if (e.key === 'm' || e.key === 'M') setMode(mode === 'input' ? 'memo' : 'input');
+});
+
+// ─── 数字パッド ─────────────────────────────────────────
+function buildNumpad() {
+  const pad = document.getElementById('numpad');
+  pad.innerHTML = '';
+  for (let n = 1; n <= 9; n++) {
+    const btn = document.createElement('button');
+    btn.className = 'num-key';
+    btn.textContent = n;
+    btn.onclick = () => inputNumber(n);
+    pad.appendChild(btn);
+  }
+  const del = document.createElement('button');
+  del.className = 'num-key del';
+  del.innerHTML = '⌫';
+  del.title = '消す';
+  del.onclick = () => inputNumber(0);
+  pad.appendChild(del);
+}
+
+// ─── 起動 ───────────────────────────────────────────────
+initTheme();
+buildNumpad();
+clearProgress();      // 空の盤面の状態を用意してから、最初の描画をする
+renderAll();
+waiting = true;
+showLoading(true);
+requestPuzzle();
+
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  コードの仕組み(かんたんな説明)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【遊び方のルール】
+  ・どの行・列・3×3のブロックにも、1〜9が1回ずつ入ります。
+  ・点線で囲まれた「ケージ」には、左上の数字と同じ合計になるように数字を入れます。
+  ・同じケージの中に、同じ数字は入りません。
+
+【問題の作り方(エキスパート)】
+  1. ルール通りの完成した盤面をランダムにつくります。
+  2. 最初は1マスずつがケージの状態から、ケージをできるだけくっつけていきます。
+     くっつけるたびに「答えを推測せず、論理だけで最後まで解けるか」を確かめ、
+     解けなくなるくっつけ方は取り消します。
+     (論理 = 候補の絞り込み、ここにしか入らない数字、45のルール)
+  3. 最後に、答えがちょうど1通りだけであることを、別の方法でもう一度確かめます。
+
+  ※「エキスパート」は、この作り方でできるだけ手がかりを少なくした問題、という意味です。
+    Sudoku.comなど他のアプリのエキスパートと同じ難しさとは限りません。
+
+【画面の裏側の動き】
+  問題づくりは1問に1〜3秒ほどかかることがあるため、画面の裏側(Web Worker)で行います。
+  遊んでいる間に、次の問題を先につくっておきます。
+*/
+</script>
+</body>
+</html>
